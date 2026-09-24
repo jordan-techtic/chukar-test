@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import axios from "axios";
 import { useForm } from "react-hook-form";
-import { toast } from "@/components/ui/toast";
+import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";

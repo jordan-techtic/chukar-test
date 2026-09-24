@@ -15,7 +15,7 @@ export function Calendar({ className, ...props }: DayPickerProps) {
       showOutsideDays
       navLayout="around"
       className={cn(
-        "text-sm [--rdp-accent-color:var(--primary)] [--rdp-accent-background-color:#fde8e8] [--rdp-day-height:2rem] [--rdp-day-width:2rem] [--rdp-nav-height:2rem]",
+        "text-sm [--rdp-accent-color:var(--primary)] [--rdp-accent-background-color:color-mix(in_srgb,var(--primary)_12%,var(--card))] [--rdp-day-height:2rem] [--rdp-day-width:2rem] [--rdp-nav-height:2rem]",
         className,
       )}
       components={{ Chevron: CalendarChevron }}

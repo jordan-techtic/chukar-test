@@ -1,5 +1,5 @@
 import type { UseFormReturn } from "react-hook-form";
-import { toast } from "@/components/ui/toast";
+import { toast } from "@/components/ui/sonner";
 import { getApiErrorCode, getApiErrorMessage, getApiFieldErrors } from "@/lib/api/errors";
 import { emptyActivityForm, type ActivityFormValues } from "@/lib/validation/activity";
 
