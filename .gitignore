@@ -1,0 +1,16 @@
+node_modules/
+dist/
+build/
+.next/
+.nuxt/
+.output/
+.turbo/
+coverage/
+.env
+.env.local
+*.log
+.DS_Store
+playwright-report/
+test-results/
+.luna/
+_luna_*_result.json
