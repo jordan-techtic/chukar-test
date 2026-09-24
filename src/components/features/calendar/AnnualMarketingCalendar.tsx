@@ -1,7 +1,7 @@
 import axios from "axios";
 import { Eye, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/toast";
 import { ActivityDetailDialog } from "@/components/features/calendar/ActivityDetailDialog";
 import { CalendarNavigation } from "@/components/features/calendar/CalendarNavigation";
 import { CreateActivityDialog } from "@/components/features/calendar/CreateActivityDialog";

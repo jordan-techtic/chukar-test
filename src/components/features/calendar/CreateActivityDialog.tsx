@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/toast";
 import { ActivityFields } from "@/components/features/calendar/ActivityFields";
 import { applyActivityErrors } from "@/components/features/calendar/activity-errors";
 import { Button } from "@/components/ui/button";

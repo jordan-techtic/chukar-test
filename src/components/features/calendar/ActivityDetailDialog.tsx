@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/toast";
 import { ActivityFields } from "@/components/features/calendar/ActivityFields";
 import { applyActivityErrors } from "@/components/features/calendar/activity-errors";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";

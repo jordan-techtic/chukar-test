@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/toast";
 import axios from "axios";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
