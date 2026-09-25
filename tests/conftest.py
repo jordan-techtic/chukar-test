@@ -31,7 +31,7 @@ _default_db = _ensure_psycopg2_url(
     os.environ.get("DATABASE_URL", "postgresql://postgres:root@127.0.0.1:5432/marketing_cal")
 )
 _default_test_db = _ensure_psycopg2_url(
-    os.environ.get("TEST_DATABASE_URL", "postgresql://postgres:root@127.0.0.1:5432/marketing_cal_test")
+    os.environ.get("TEST_DATABASE_URL", "postgresql://postgres:root@127.0.0.1:5432/marketing_cal")
 )
 os.environ["DATABASE_URL"] = _ensure_psycopg2_url(os.environ.get("DATABASE_URL", _default_db))
 os.environ["TEST_DATABASE_URL"] = _ensure_psycopg2_url(
