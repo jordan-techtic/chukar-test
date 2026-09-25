@@ -8,7 +8,12 @@ from sqlalchemy.orm import Session
 
 from app.constants.activity_types import ACTIVITY_TYPE_CONFIG
 from app.core.config import Settings
-from app.exceptions.http_exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError
+from app.exceptions.http_exceptions import (
+    BadRequestError,
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+)
 from app.models.activity import Activity
 from app.models.user import User
 from app.repositories.activity_repository import ActivityRepository

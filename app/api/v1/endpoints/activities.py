@@ -10,7 +10,11 @@ from app.core.rate_limit import limiter
 from app.db.session import get_db
 from app.dependencies.auth import get_current_user
 from app.models.user import User
-from app.schemas.activity import ActivityResponse, CreateActivityRequest, UpdateActivityRequest
+from app.schemas.activity import (
+    ActivityResponse,
+    CreateActivityRequest,
+    UpdateActivityRequest,
+)
 from app.schemas.openapi_marketing_calendar import (
     OPENAPI_ERROR_EXAMPLE_ACTIVITY_NOT_FOUND,
     OPENAPI_ERROR_EXAMPLE_ACTIVITY_TYPE_DATE_CONFLICT,

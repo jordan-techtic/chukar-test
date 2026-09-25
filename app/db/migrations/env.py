@@ -24,8 +24,8 @@ target_metadata = Base.metadata
 import getpass as _alex_getpass
 import logging as _alex_logging
 import socket as _alex_socket
+from datetime import UTC
 from datetime import datetime as _alex_datetime
-from datetime import timezone as _alex_timezone
 
 import sqlalchemy as _alex_sa
 
@@ -68,7 +68,7 @@ def _alex_record_migration(ctx, step, heads, run_args):
         "description": doc.strip().splitlines()[0][:255] if doc.strip() else None,
         "applied_by": user,
         "hostname": _alex_socket.gethostname(),
-        "applied_at": _alex_datetime.now(_alex_timezone.utc),
+        "applied_at": _alex_datetime.now(UTC),
     }
     conn = ctx.connection
     try:

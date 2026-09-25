@@ -5,20 +5,15 @@ HTTP assertions, and mocked third-party Klaviyo calls.
 """
 
 from datetime import date, timedelta
-from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
 
-from app.schemas.activity import KlaviyoPerformanceMetrics
 from tests.conftest import (
     ADMIN_EMAIL,
-    INACTIVE_EMAIL,
     LOGIN_URL,
-    MEMBER_EMAIL,
     TEST_PASSWORD,
-    VIEWER_EMAIL,
 )
 
 CALENDAR_URL = "/api/v1/marketing-team-member/calendar"

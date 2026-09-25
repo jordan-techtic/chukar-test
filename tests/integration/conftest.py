@@ -5,12 +5,11 @@ from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.security import create_access_token
-from app.schemas.activity import KlaviyoPerformanceMetrics
 from app.models.user import User
+from app.schemas.activity import KlaviyoPerformanceMetrics
 from tests.conftest import (
     INACTIVE_EMAIL,
     LOGIN_URL,

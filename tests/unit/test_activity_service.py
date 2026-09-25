@@ -5,7 +5,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.exceptions.http_exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError
+from app.exceptions.http_exceptions import (
+    BadRequestError,
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+)
 from app.models.activity import Activity
 from app.models.user import User
 from app.repositories.activity_repository import ActivityRepository
