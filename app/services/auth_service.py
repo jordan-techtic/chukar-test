@@ -12,7 +12,9 @@ from app.core.logging import logger
 from app.core.security import create_access_token, create_refresh_token, verify_password
 from app.exceptions.http_exceptions import ForbiddenError, UnauthorizedError
 from app.models.user import MARKETING_TEAM_MEMBER_ROLE
-from app.repositories.password_reset_token_repository import PasswordResetTokenRepository
+from app.repositories.password_reset_token_repository import (
+    PasswordResetTokenRepository,
+)
 from app.repositories.user_repository import UserRepository
 from app.schemas.marketing_team_member import (
     ForgotPasswordData,

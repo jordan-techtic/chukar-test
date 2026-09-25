@@ -19,7 +19,6 @@ from app.core.security import (
 )
 from app.db.database_url import normalize_database_url
 from app.models.password_reset_token import PasswordResetToken
-from app.models.user import MARKETING_TEAM_MEMBER_ROLE
 from tests.conftest import (
     INACTIVE_EMAIL,
     MEMBER_EMAIL,

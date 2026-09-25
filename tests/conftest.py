@@ -189,9 +189,8 @@ def db_client(test_engine, db_session_factory) -> Generator[TestClient, None, No
 
     with patch(
         "app.clients.klaviyo_client.KlaviyoClient.send_password_reset_email",
-    ):
-        with TestClient(app) as test_client:
-            yield test_client
+    ), TestClient(app) as test_client:
+        yield test_client
 
     app.dependency_overrides.clear()
     _truncate_all_tables(test_engine)

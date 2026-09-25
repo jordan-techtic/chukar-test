@@ -8,7 +8,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 from app.core.config import get_settings
-from app.core.security import TOKEN_TYPE_ACCESS, TOKEN_TYPE_REFRESH, create_access_token
+from app.core.security import TOKEN_TYPE_REFRESH
 from app.models.password_reset_token import PasswordResetToken
 from app.models.user import User
 from tests.conftest import (
