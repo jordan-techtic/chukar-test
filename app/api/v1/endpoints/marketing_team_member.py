@@ -19,7 +19,6 @@ from app.schemas.responses import (
     OPENAPI_ERROR_EXAMPLE_INVALID_CREDENTIALS,
     OPENAPI_ERROR_EXAMPLE_RATE_LIMIT,
     OPENAPI_ERROR_EXAMPLE_VALIDATION,
-    ErrorResponse,
     SuccessResponse,
     openapi_error_response,
 )

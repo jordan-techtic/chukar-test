@@ -12,7 +12,7 @@ from app.repositories.password_reset_token_repository import (
     PasswordResetTokenRepository,
 )
 from app.repositories.user_repository import UserRepository
-from app.services.auth_service import AuthService, FORGOT_PASSWORD_MESSAGE
+from app.services.auth_service import FORGOT_PASSWORD_MESSAGE, AuthService
 
 
 @pytest.fixture

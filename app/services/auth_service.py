@@ -2,8 +2,7 @@
 
 import hashlib
 import secrets
-import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
@@ -149,7 +148,7 @@ class AuthService:
         """Create reset token and send email via Klaviyo."""
         raw_token = secrets.token_urlsafe(32)
         token_hash = self._hash_token(raw_token)
-        expires_at = datetime.now(timezone.utc) + timedelta(
+        expires_at = datetime.now(UTC) + timedelta(
             minutes=self._settings.password_reset_token_expire_minutes
         )
 

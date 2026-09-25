@@ -2,7 +2,7 @@
 
 import os
 from collections.abc import Generator
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 from urllib.parse import urlparse, urlunparse
 
@@ -12,6 +12,7 @@ from jose import jwt
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
+
 
 def _ensure_psycopg2_url(url: str) -> str:
     """Normalize PostgreSQL URLs to use psycopg2 (installed driver)."""
@@ -48,16 +49,16 @@ os.environ["RATE_LIMIT_ENABLED"] = "false"
 os.environ.setdefault("KLAVIYO_API_KEY", "pk_test_key")
 os.environ.setdefault("FRONTEND_RESET_URL", "http://localhost:3000/reset-password")
 
-from app.core.config import get_settings  # noqa: E402
-from app.core.security import (  # noqa: E402
+from app.core.config import get_settings
+from app.core.security import (
     TOKEN_TYPE_ACCESS,
     create_access_token,
     hash_password,
 )
-from app.db.base import Base  # noqa: E402
-from app.db.session import get_db  # noqa: E402
-from app.main import app  # noqa: E402
-from app.models.user import MARKETING_TEAM_MEMBER_ROLE, User  # noqa: E402
+from app.db.base import Base
+from app.db.session import get_db
+from app.main import app
+from app.models.user import MARKETING_TEAM_MEMBER_ROLE, User
 
 # --- Test user credentials (5 distinct users) ---
 ADMIN_EMAIL = "admin@test.com"
@@ -323,7 +324,7 @@ def auth_headers_regular(regular_access_token) -> dict[str, str]:
 @pytest.fixture
 def expired_access_token(admin_user, settings) -> str:
     """Expired JWT access token for auth rejection tests."""
-    expire = datetime.now(timezone.utc) - timedelta(minutes=5)
+    expire = datetime.now(UTC) - timedelta(minutes=5)
     payload = {"sub": str(admin_user.id), "exp": expire, "type": TOKEN_TYPE_ACCESS}
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 

@@ -1,6 +1,6 @@
 """CMC-50 integration tests: marketing team member login and forgot-password."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
@@ -270,4 +270,4 @@ def test_cmc50_forgot_password_creates_reset_token_record(
     after = db_session.scalars(select(PasswordResetToken)).all()
     assert len(after) == len(before) + 1
     assert after[-1].user_id == regular_user.id
-    assert after[-1].expires_at > datetime.now(timezone.utc)
+    assert after[-1].expires_at > datetime.now(UTC)

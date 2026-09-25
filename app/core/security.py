@@ -1,6 +1,6 @@
 """JWT token utilities and password hashing helpers."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from jose import JWTError, jwt
@@ -31,7 +31,7 @@ def create_access_token(
 ) -> str:
     """Create a signed JWT access token."""
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + (
+    expire = datetime.now(UTC) + (
         expires_delta
         if expires_delta
         else timedelta(minutes=settings.access_token_expire_minutes)
@@ -51,7 +51,7 @@ def create_refresh_token(
 ) -> str:
     """Create a signed JWT refresh token."""
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + (
+    expire = datetime.now(UTC) + (
         expires_delta
         if expires_delta
         else timedelta(days=settings.refresh_token_expire_days)

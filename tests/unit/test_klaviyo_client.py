@@ -84,13 +84,12 @@ def test_send_password_reset_email_failure_after_retries(
         mock_client.post.return_value = fail_response
         mock_client_cls.return_value = mock_client
 
-        with patch("time.sleep"):
-            with pytest.raises(KlaviyoClientError):
-                client.send_password_reset_email(
-                    to_email="user@example.com",
-                    reset_link="http://localhost:3000/reset?token=abc",
-                    user_name="testuser",
-                )
+        with patch("time.sleep"), pytest.raises(KlaviyoClientError):
+            client.send_password_reset_email(
+                to_email="user@example.com",
+                reset_link="http://localhost:3000/reset?token=abc",
+                user_name="testuser",
+            )
 
 
 def test_send_password_reset_email_missing_api_key(
@@ -119,12 +118,11 @@ def test_send_password_reset_email_request_error_retries(
         mock_client.post.side_effect = httpx.ConnectError("connection refused")
         mock_client_cls.return_value = mock_client
 
-        with patch("time.sleep"):
-            with pytest.raises(KlaviyoClientError):
-                client.send_password_reset_email(
-                    to_email="user@example.com",
-                    reset_link="http://localhost:3000/reset?token=abc",
-                    user_name="testuser",
-                )
+        with patch("time.sleep"), pytest.raises(KlaviyoClientError):
+            client.send_password_reset_email(
+                to_email="user@example.com",
+                reset_link="http://localhost:3000/reset?token=abc",
+                user_name="testuser",
+            )
 
         assert mock_client.post.call_count == 3

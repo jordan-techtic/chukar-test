@@ -2,7 +2,13 @@
 
 from fastapi.testclient import TestClient
 
-from tests.conftest import ADMIN_EMAIL, ADMIN_PASSWORD, ADMIN_USERNAME, INACTIVE_EMAIL, INACTIVE_PASSWORD
+from tests.conftest import (
+    ADMIN_EMAIL,
+    ADMIN_PASSWORD,
+    ADMIN_USERNAME,
+    INACTIVE_EMAIL,
+    INACTIVE_PASSWORD,
+)
 
 
 def test_post_login_email_returns_200_and_tokens(

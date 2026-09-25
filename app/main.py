@@ -10,8 +10,8 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from app.api.v1.router import api_router
 from app.core.config import get_settings
-from app.core.rate_limit import limiter
 from app.core.logging import logger, setup_logging
+from app.core.rate_limit import limiter
 from app.exceptions.http_exceptions import AppHTTPException
 from app.middleware.auth_middleware import AuthMiddleware
 from app.middleware.logging_middleware import LoggingMiddleware

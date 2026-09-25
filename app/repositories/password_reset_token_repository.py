@@ -1,7 +1,7 @@
 """Password reset token data access repository."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -25,7 +25,7 @@ class PasswordResetTokenRepository:
 
     def invalidate_existing_for_user(self, user_id: uuid.UUID) -> None:
         """Mark all unused tokens for a user as used."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         stmt = select(PasswordResetToken).where(
             PasswordResetToken.user_id == user_id,
             PasswordResetToken.used_at.is_(None),
