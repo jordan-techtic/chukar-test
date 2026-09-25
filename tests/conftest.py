@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
+import app.models  # noqa: F401 — register all ORM models for metadata
 from app.core.config import get_settings
 from app.core.security import create_access_token, hash_password
 from app.db.base import Base

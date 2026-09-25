@@ -1,4 +1,4 @@
-"""Klaviyo API client for transactional password reset emails."""
+"""Klaviyo API client for transactional emails and campaign performance."""
 
 import time
 from typing import Any
@@ -7,8 +7,10 @@ import httpx
 
 from app.core.config import Settings
 from app.core.logging import logger
+from app.schemas.activity import KlaviyoPerformanceMetrics
 
 KLAVIYO_EVENTS_URL = "https://a.klaviyo.com/api/events/"
+KLAVIYO_CAMPAIGNS_URL = "https://a.klaviyo.com/api/campaigns/"
 KLAVIYO_API_REVISION = "2024-02-15"
 PASSWORD_RESET_METRIC_NAME = "Password Reset Requested"
 
@@ -18,11 +20,89 @@ class KlaviyoClientError(Exception):
 
 
 class KlaviyoClient:
-    """Adapter for sending password reset events via the Klaviyo Events API."""
+    """Adapter for Klaviyo Events API and campaign performance lookups."""
 
     def __init__(self, settings: Settings) -> None:
         """Initialize with application settings."""
         self._settings = settings
+
+    def get_campaign_performance(self, campaign_code: str) -> KlaviyoPerformanceMetrics | None:
+        """Retrieve historical performance metrics for a campaign code."""
+        api_key = self._settings.klaviyo_api_key.strip()
+        if not api_key:
+            logger.debug("Klaviyo API key not configured; skipping performance lookup.")
+            return None
+
+        headers = {
+            "Authorization": f"Klaviyo-API-Key {api_key}",
+            "revision": KLAVIYO_API_REVISION,
+            "Accept": "application/json",
+        }
+        params = {"filter": f'equals(name,"{campaign_code}")'}
+
+        last_error: Exception | None = None
+        max_attempts = max(1, self._settings.klaviyo_max_retries)
+
+        for attempt in range(1, max_attempts + 1):
+            try:
+                with httpx.Client(timeout=10.0) as client:
+                    response = client.get(
+                        KLAVIYO_CAMPAIGNS_URL,
+                        headers=headers,
+                        params=params,
+                    )
+
+                if response.status_code == 404:
+                    return None
+
+                if response.status_code < 400:
+                    return self._parse_performance_metrics(response.json())
+
+                if response.status_code >= 500 and attempt < max_attempts:
+                    logger.warning(
+                        "Klaviyo performance lookup returned {} on attempt {}/{}",
+                        response.status_code,
+                        attempt,
+                        max_attempts,
+                    )
+                    time.sleep(0.5 * attempt)
+                    continue
+
+                raise KlaviyoClientError(
+                    f"Klaviyo API returned status {response.status_code}",
+                )
+            except httpx.RequestError as exc:
+                last_error = exc
+                if attempt < max_attempts:
+                    logger.warning(
+                        "Klaviyo performance request error on attempt {}/{}: {}",
+                        attempt,
+                        max_attempts,
+                        exc,
+                    )
+                    time.sleep(0.5 * attempt)
+                    continue
+                raise KlaviyoClientError("Klaviyo performance request failed.") from exc
+
+        raise KlaviyoClientError("Klaviyo performance request failed after retries.") from last_error
+
+    def _parse_performance_metrics(self, payload: dict[str, Any]) -> KlaviyoPerformanceMetrics | None:
+        """Extract performance metrics from a Klaviyo campaigns API response."""
+        data = payload.get("data") or []
+        if not data:
+            return None
+
+        attributes = data[0].get("attributes") or {}
+        statistics = attributes.get("statistics") or {}
+        if not statistics:
+            return None
+
+        return KlaviyoPerformanceMetrics(
+            revenue=statistics.get("revenue"),
+            open_rate=statistics.get("open_rate"),
+            click_rate=statistics.get("click_rate"),
+            delivered_orders=statistics.get("delivered_orders"),
+        )
 
     def send_password_reset_email(
         self,

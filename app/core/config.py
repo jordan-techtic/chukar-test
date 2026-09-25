@@ -49,6 +49,14 @@ class Settings(BaseSettings):
         default="http://localhost:3000/reset-password",
         alias="FRONTEND_RESET_URL",
     )
+    organization_name: str = Field(
+        default="Marketing Content Calendar",
+        alias="ORGANIZATION_NAME",
+    )
+    klaviyo_performance_enabled: bool = Field(
+        default=False,
+        alias="KLAVIYO_PERFORMANCE_ENABLED",
+    )
 
     @field_validator("cors_origins", mode="before")
     @classmethod
