@@ -3,6 +3,7 @@
 import os
 from collections.abc import Generator
 from unittest.mock import MagicMock
+from urllib.parse import urlparse, urlunparse
 
 import pytest
 from fastapi.testclient import TestClient
@@ -14,6 +15,10 @@ from sqlalchemy.pool import StaticPool
 os.environ.setdefault(
     "DATABASE_URL",
     "postgresql://postgres:root@127.0.0.1:5432/marketing_cal",
+)
+os.environ.setdefault(
+    "TEST_DATABASE_URL",
+    "postgresql://postgres:root@127.0.0.1:5432/marketing_cal_test",
 )
 os.environ.setdefault(
     "JWT_SECRET",
@@ -54,16 +59,56 @@ def _postgres_available(database_url: str) -> bool:
         return False
 
 
+def _resolve_test_database_url() -> str:
+    """Return a dedicated test database URL, never the dev database."""
+    explicit = os.environ.get("TEST_DATABASE_URL", "").strip()
+    if explicit:
+        return explicit
+
+    base_url = os.environ.get(
+        "DATABASE_URL",
+        "postgresql://postgres:root@127.0.0.1:5432/marketing_cal",
+    )
+    parsed = urlparse(base_url)
+    db_name = parsed.path.lstrip("/") or "marketing_cal"
+    if db_name.endswith("_test"):
+        return base_url
+
+    test_db_name = f"{db_name}_test"
+    test_path = f"/{test_db_name}"
+    return urlunparse(parsed._replace(path=test_path))
+
+
+def _assert_safe_test_database(database_url: str) -> None:
+    """Refuse integration tests against a non-test database name."""
+    db_name = urlparse(database_url).path.lstrip("/")
+    if not db_name.endswith("_test"):
+        pytest.skip(
+            "Integration tests require a dedicated test database URL "
+            f"(database name must end with '_test', got '{db_name}'). "
+            "Set TEST_DATABASE_URL to a separate database."
+        )
+
+
 @pytest.fixture(scope="session")
 def postgres_engine():
-    """Session-scoped PostgreSQL engine; skipped if DB unavailable."""
-    database_url = os.environ["DATABASE_URL"]
+    """Session-scoped PostgreSQL engine against a dedicated test database.
+
+    Schema is created once if missing. Each test uses transaction rollbacks
+    via db_session — tables are never dropped on teardown.
+    """
+    database_url = _resolve_test_database_url()
+    _assert_safe_test_database(database_url)
+
     if not _postgres_available(database_url):
-        pytest.skip("PostgreSQL not available for integration tests")
+        pytest.skip(
+            "PostgreSQL test database not available for integration tests. "
+            f"Expected reachable database at: {database_url}"
+        )
+
     engine = create_engine(database_url, pool_pre_ping=True)
     Base.metadata.create_all(bind=engine)
     yield engine
-    Base.metadata.drop_all(bind=engine)
     engine.dispose()
 
 
