@@ -2,6 +2,8 @@
 
 from fastapi.testclient import TestClient
 
+from tests.conftest import ADMIN_EMAIL, ADMIN_PASSWORD, ADMIN_USERNAME, INACTIVE_EMAIL, INACTIVE_PASSWORD
+
 
 def test_post_login_email_returns_200_and_tokens(
     db_client: TestClient,
@@ -11,8 +13,8 @@ def test_post_login_email_returns_200_and_tokens(
     response = db_client.post(
         "/api/v1/marketing-team-member/login",
         json={
-            "email_or_username": "marketing.user@example.com",
-            "password": "SecurePass1!",
+            "email_or_username": ADMIN_EMAIL,
+            "password": ADMIN_PASSWORD,
         },
     )
     assert response.status_code == 200
@@ -22,7 +24,7 @@ def test_post_login_email_returns_200_and_tokens(
     assert "access_token" in body["data"]
     assert "refresh_token" in body["data"]
     assert body["data"]["token_type"] == "bearer"
-    assert body["data"]["user"]["email"] == "marketing.user@example.com"
+    assert body["data"]["user"]["email"] == ADMIN_EMAIL
     assert body["data"]["user"]["role"] == "marketing_team_member"
 
 
@@ -34,14 +36,14 @@ def test_post_login_username_returns_200_and_tokens(
     response = db_client.post(
         "/api/v1/marketing-team-member/login",
         json={
-            "email_or_username": "marketing_user",
-            "password": "SecurePass1!",
+            "email_or_username": ADMIN_USERNAME,
+            "password": ADMIN_PASSWORD,
         },
     )
     assert response.status_code == 200
     body = response.json()
     assert body["success"] is True
-    assert body["data"]["user"]["username"] == "marketing_user"
+    assert body["data"]["user"]["username"] == ADMIN_USERNAME
 
 
 def test_post_login_invalid_credentials_401(
@@ -52,7 +54,7 @@ def test_post_login_invalid_credentials_401(
     response = db_client.post(
         "/api/v1/marketing-team-member/login",
         json={
-            "email_or_username": "marketing.user@example.com",
+            "email_or_username": ADMIN_EMAIL,
             "password": "WrongPass1!",
         },
     )
@@ -70,8 +72,8 @@ def test_post_login_inactive_user_403(
     response = db_client.post(
         "/api/v1/marketing-team-member/login",
         json={
-            "email_or_username": "inactive.user@example.com",
-            "password": "SecurePass1!",
+            "email_or_username": INACTIVE_EMAIL,
+            "password": INACTIVE_PASSWORD,
         },
     )
     assert response.status_code == 403
@@ -88,7 +90,7 @@ def test_post_forgot_password_registered_email_200(
     """POST forgot-password for registered email returns generic 200."""
     response = db_client.post(
         "/api/v1/marketing-team-member/forgot-password",
-        json={"email": "marketing.user@example.com"},
+        json={"email": ADMIN_EMAIL},
     )
     assert response.status_code == 200
     body = response.json()

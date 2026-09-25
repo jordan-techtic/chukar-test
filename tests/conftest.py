@@ -13,14 +13,29 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+def _ensure_psycopg2_url(url: str) -> str:
+    """Normalize PostgreSQL URLs to use psycopg2 (installed driver)."""
+    if url.startswith("postgresql+asyncpg://"):
+        return url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
+    if url.startswith("postgresql+psycopg://"):
+        return url.replace("postgresql+psycopg://", "postgresql+psycopg2://", 1)
+    if url.startswith("postgres://"):
+        return url.replace("postgres://", "postgresql+psycopg2://", 1)
+    if url.startswith("postgresql://"):
+        return url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    return url
+
+
 # Environment defaults before application imports.
-os.environ.setdefault(
-    "DATABASE_URL",
-    os.environ.get("DATABASE_URL", "postgresql://postgres:root@127.0.0.1:5432/marketing_cal"),
+_default_db = _ensure_psycopg2_url(
+    os.environ.get("DATABASE_URL", "postgresql://postgres:root@127.0.0.1:5432/marketing_cal")
 )
-os.environ.setdefault(
-    "TEST_DATABASE_URL",
-    os.environ.get("TEST_DATABASE_URL", "postgresql://postgres:root@127.0.0.1:5432/marketing_cal_test"),
+_default_test_db = _ensure_psycopg2_url(
+    os.environ.get("TEST_DATABASE_URL", "postgresql://postgres:root@127.0.0.1:5432/marketing_cal_test")
+)
+os.environ["DATABASE_URL"] = _ensure_psycopg2_url(os.environ.get("DATABASE_URL", _default_db))
+os.environ["TEST_DATABASE_URL"] = _ensure_psycopg2_url(
+    os.environ.get("TEST_DATABASE_URL", _default_test_db)
 )
 os.environ.setdefault("JWT_SECRET", "test-jwt-secret-key-for-pytest-only-minimum-length")
 os.environ.setdefault("JWT_ALGORITHM", "HS256")
@@ -66,11 +81,7 @@ NEW_USER_PASSWORD = "NewUser123!"
 
 def _sync_postgres_url(url: str) -> str:
     """Force psycopg2 driver for SQLAlchemy test engines."""
-    if url.startswith("postgresql://"):
-        return url.replace("postgresql://", "postgresql+psycopg2://", 1)
-    if url.startswith("postgres://"):
-        return url.replace("postgres://", "postgresql+psycopg2://", 1)
-    return url
+    return _ensure_psycopg2_url(url)
 
 
 def _postgres_available(database_url: str) -> bool:
