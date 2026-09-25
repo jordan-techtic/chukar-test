@@ -2,7 +2,7 @@
 
 import uuid
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Depends, Path, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
@@ -82,10 +82,19 @@ _CREATE_RESPONSES = {
         "Marketing activity created successfully.",
         OPENAPI_SUCCESS_EXAMPLE_CREATE_ACTIVITY,
     ),
-    **openapi_error_response(
+    **openapi_error_response_examples(
         400,
         "Invalid activity date or missing required fields.",
-        OPENAPI_ERROR_EXAMPLE_INVALID_ACTIVITY_DATE,
+        {
+            "invalidDate": {
+                "summary": "Date in the past",
+                "value": OPENAPI_ERROR_EXAMPLE_INVALID_ACTIVITY_DATE,
+            },
+            "missingFields": {
+                "summary": "Type-specific required fields missing",
+                "value": OPENAPI_ERROR_EXAMPLE_MISSING_REQUIRED_FIELDS,
+            },
+        },
     ),
     **openapi_error_response(
         409,
@@ -120,20 +129,38 @@ _UPDATE_RESPONSES = {
         "Marketing activity updated successfully.",
         OPENAPI_SUCCESS_EXAMPLE_CREATE_ACTIVITY,
     ),
-    **openapi_error_response(
+    **openapi_error_response_examples(
         400,
         "Invalid activity date or missing required fields.",
-        OPENAPI_ERROR_EXAMPLE_MISSING_REQUIRED_FIELDS,
+        {
+            "missingFields": {
+                "summary": "Type-specific required fields missing",
+                "value": OPENAPI_ERROR_EXAMPLE_MISSING_REQUIRED_FIELDS,
+            },
+            "invalidDate": {
+                "summary": "Date in the past",
+                "value": OPENAPI_ERROR_EXAMPLE_INVALID_ACTIVITY_DATE,
+            },
+        },
     ),
     **openapi_error_response(
         404,
         "Activity not found.",
         OPENAPI_ERROR_EXAMPLE_ACTIVITY_NOT_FOUND,
     ),
-    **openapi_error_response(
+    **openapi_error_response_examples(
         409,
         "Version conflict or duplicate type on date.",
-        OPENAPI_ERROR_EXAMPLE_ACTIVITY_VERSION_CONFLICT,
+        {
+            "versionConflict": {
+                "summary": "Stale optimistic lock version",
+                "value": OPENAPI_ERROR_EXAMPLE_ACTIVITY_VERSION_CONFLICT,
+            },
+            "typeDateConflict": {
+                "summary": "Duplicate activity type on target date",
+                "value": OPENAPI_ERROR_EXAMPLE_ACTIVITY_TYPE_DATE_CONFLICT,
+            },
+        },
     ),
     **_COMMON_ERROR_RESPONSES,
 }
@@ -223,10 +250,15 @@ async def create_activity(
 @limiter.limit("60/minute")
 async def get_activity(
     request: Request,
-    activity_id: uuid.UUID,
+    activity_id: uuid.UUID = Path(
+        ...,
+        description="UUID of the marketing activity.",
+        examples=["550e8400-e29b-41d4-a716-446655440000"],
+    ),
     include_performance: bool = Query(
         default=False,
         description="Include Klaviyo historical performance metrics when authorized.",
+        examples=[False],
     ),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
@@ -267,7 +299,11 @@ async def get_activity(
 @limiter.limit("30/minute")
 async def update_activity(
     request: Request,
-    activity_id: uuid.UUID,
+    activity_id: uuid.UUID = Path(
+        ...,
+        description="UUID of the marketing activity.",
+        examples=["550e8400-e29b-41d4-a716-446655440000"],
+    ),
     body: UpdateActivityRequest,
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
@@ -287,6 +323,7 @@ async def update_activity(
 
 @router.delete(
     "/activities/{activity_id}",
+    response_model=SuccessResponse[dict[str, str]],
     status_code=status.HTTP_200_OK,
     summary="Delete marketing activity",
     operation_id="deleteMarketingActivity",
@@ -303,7 +340,11 @@ async def update_activity(
 @limiter.limit("30/minute")
 async def delete_activity(
     request: Request,
-    activity_id: uuid.UUID,
+    activity_id: uuid.UUID = Path(
+        ...,
+        description="UUID of the marketing activity to delete.",
+        examples=["550e8400-e29b-41d4-a716-446655440000"],
+    ),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
     current_user: User = Depends(get_current_user),

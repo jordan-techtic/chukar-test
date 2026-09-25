@@ -59,7 +59,11 @@ class CreateActivityRequest(BaseModel):
         description="Optional activity details shown in calendar detail views.",
         examples=["Primary spring product launch email send."],
     )
-    status: str = Field(default="active", description="Activity status (active|inactive).")
+    status: str = Field(
+        default="active",
+        description="Activity status: active or inactive.",
+        examples=["active"],
+    )
 
     @field_validator("activity_type")
     @classmethod
@@ -86,14 +90,28 @@ class UpdateActivityRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     activity_type: str | None = Field(default=None, description="Predefined activity type.")
-    title: str | None = Field(default=None, min_length=1, max_length=100)
+    title: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=100,
+        description="Updated activity title.",
+        examples=["Updated Campaign Title"],
+    )
     activity_date: DateType | None = Field(
         default=None,
         alias="date",
         description="Scheduled date (YYYY-MM-DD).",
     )
-    notes: str | None = Field(default=None, max_length=500)
-    description: str | None = Field(default=None, max_length=500)
+    notes: str | None = Field(
+        default=None,
+        max_length=500,
+        description="Updated notes or additional information.",
+    )
+    description: str | None = Field(
+        default=None,
+        max_length=500,
+        description="Updated activity details.",
+    )
     status: str | None = Field(default=None, description="Activity status (active|inactive).")
     version: int | None = Field(
         default=None,
@@ -123,10 +141,10 @@ class UpdateActivityRequest(BaseModel):
 class KlaviyoPerformanceMetrics(BaseModel):
     """Historical performance metrics retrieved from Klaviyo."""
 
-    revenue: float | None = Field(default=None)
-    open_rate: float | None = Field(default=None)
-    click_rate: float | None = Field(default=None)
-    delivered_orders: int | None = Field(default=None)
+    revenue: float | None = Field(default=None, description="Total revenue attributed to the campaign.")
+    open_rate: float | None = Field(default=None, description="Email open rate (0-1).", examples=[0.42])
+    click_rate: float | None = Field(default=None, description="Click-through rate (0-1).", examples=[0.08])
+    delivered_orders: int | None = Field(default=None, description="Number of delivered orders.", examples=[120])
 
 
 class ActivityResponse(BaseModel):
@@ -134,21 +152,24 @@ class ActivityResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True, ser_json_by_alias=True)
 
-    id: uuid.UUID
-    activity_type: str = Field(..., serialization_alias="type", description="Activity type.")
-    title: str
-    activity_date: DateType = Field(..., serialization_alias="date")
-    campaign_code: str
-    notes: str | None = None
+    id: uuid.UUID = Field(..., description="Unique activity identifier.")
+    activity_type: str = Field(..., serialization_alias="type", description="Activity type.", examples=["email_send"])
+    title: str = Field(..., description="Activity title shown on the calendar.", examples=["Spring Launch Campaign"])
+    activity_date: DateType = Field(..., serialization_alias="date", description="Scheduled date (YYYY-MM-DD).")
+    campaign_code: str = Field(..., description="Auto-generated campaign code (C6-MO6-Y25 format).", examples=["C6-MO10-Y26"])
+    notes: str | None = Field(default=None, description="Optional notes or additional information.")
     description: str | None = Field(
         default=None,
         description="Optional activity description shown in calendar detail views.",
     )
-    category: str
-    status: str
-    color: str
-    version: int
-    performance: KlaviyoPerformanceMetrics | None = None
+    category: str = Field(..., description="Activity category (promotions, content, focuses).")
+    status: str = Field(..., description="Activity status: active or inactive.", examples=["active"])
+    color: str = Field(..., description="Hex color for calendar display.", examples=["#4F46E5"])
+    version: int = Field(..., ge=1, description="Optimistic lock version for concurrent edits.")
+    performance: KlaviyoPerformanceMetrics | None = Field(
+        default=None,
+        description="Klaviyo historical metrics when include_performance is enabled.",
+    )
 
 
 class CalendarDayEntry(BaseModel):
@@ -265,10 +286,16 @@ class ToggleViewRequest(BaseModel):
 class ToggleViewData(BaseModel):
     """Response after toggling historical management view."""
 
-    view: ActivityViewMode
-    current_year: int
-    previous_year: int
-    role: str
-    organization: str
-    current_calendar: list[HistoricalCalendarEntry]
-    previous_calendar: list[HistoricalCalendarEntry]
+    view: ActivityViewMode = Field(..., description="Active view mode after toggle.")
+    current_year: int = Field(..., description="Reference calendar year.", examples=[2026])
+    previous_year: int = Field(..., description="Previous comparison year.", examples=[2025])
+    role: str = Field(..., description="Authenticated user role.", examples=["marketing_team_member"])
+    organization: str = Field(..., description="Organization branding name.")
+    current_calendar: list[HistoricalCalendarEntry] = Field(
+        default_factory=list,
+        description="Activities in the reference year (empty when view filters it out).",
+    )
+    previous_calendar: list[HistoricalCalendarEntry] = Field(
+        default_factory=list,
+        description="Activities in the previous year (empty when view filters it out).",
+    )
