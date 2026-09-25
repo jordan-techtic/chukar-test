@@ -21,10 +21,10 @@ from app.db.database_url import normalize_database_url
 from app.models.password_reset_token import PasswordResetToken
 from app.models.user import MARKETING_TEAM_MEMBER_ROLE
 from tests.conftest import (
-    ADMIN_EMAIL,
-    ADMIN_PASSWORD,
-    ADMIN_USERNAME,
     INACTIVE_EMAIL,
+    MEMBER_EMAIL,
+    MEMBER_USERNAME,
+    TEST_PASSWORD,
     WRONG_ROLE_EMAIL,
     WRONG_ROLE_PASSWORD,
 )
@@ -37,7 +37,7 @@ def test_cmc50_login_with_email_returns_tokens(db_client: TestClient) -> None:
     """Users can log in using registered email and password."""
     response = db_client.post(
         LOGIN_URL,
-        json={"email_or_username": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+        json={"email_or_username": MEMBER_EMAIL, "password": TEST_PASSWORD},
     )
     assert response.status_code == 200
     data = response.json()["data"]
@@ -49,7 +49,7 @@ def test_cmc50_login_with_username_returns_tokens(db_client: TestClient) -> None
     """Users can log in using registered username and password."""
     response = db_client.post(
         LOGIN_URL,
-        json={"email_or_username": ADMIN_USERNAME, "password": ADMIN_PASSWORD},
+        json={"email_or_username": MEMBER_USERNAME, "password": TEST_PASSWORD},
     )
     assert response.status_code == 200
 
@@ -58,7 +58,7 @@ def test_cmc50_login_email_case_insensitive(db_client: TestClient) -> None:
     """Email login should be case-insensitive."""
     response = db_client.post(
         LOGIN_URL,
-        json={"email_or_username": ADMIN_EMAIL.upper(), "password": ADMIN_PASSWORD},
+        json={"email_or_username": MEMBER_EMAIL.upper(), "password": TEST_PASSWORD},
     )
     assert response.status_code == 200
 
@@ -67,7 +67,7 @@ def test_cmc50_login_unicode_username(db_client: TestClient) -> None:
     """Unicode usernames should be handled without server errors."""
     response = db_client.post(
         LOGIN_URL,
-        json={"email_or_username": "usér_测试", "password": ADMIN_PASSWORD},
+        json={"email_or_username": "usér_测试", "password": TEST_PASSWORD},
     )
     assert response.status_code == 401
 
@@ -76,7 +76,7 @@ def test_cmc50_login_empty_password_422(db_client: TestClient) -> None:
     """Empty password should return validation error."""
     response = db_client.post(
         LOGIN_URL,
-        json={"email_or_username": ADMIN_EMAIL, "password": ""},
+        json={"email_or_username": MEMBER_EMAIL, "password": ""},
     )
     assert response.status_code == 422
 
@@ -85,7 +85,7 @@ def test_cmc50_login_unknown_user_401(db_client: TestClient) -> None:
     """Unknown user returns 401 INVALID_CREDENTIALS."""
     response = db_client.post(
         LOGIN_URL,
-        json={"email_or_username": "nobody@example.com", "password": ADMIN_PASSWORD},
+        json={"email_or_username": "nobody@example.com", "password": TEST_PASSWORD},
     )
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "INVALID_CREDENTIALS"
@@ -95,7 +95,7 @@ def test_cmc50_login_invalid_password_401(db_client: TestClient) -> None:
     """Wrong password returns 401 INVALID_CREDENTIALS."""
     response = db_client.post(
         LOGIN_URL,
-        json={"email_or_username": ADMIN_EMAIL, "password": "WrongPass1!"},
+        json={"email_or_username": MEMBER_EMAIL, "password": "WrongPass1!"},
     )
     assert response.status_code == 401
 
@@ -104,7 +104,7 @@ def test_cmc50_inactive_user_login_forbidden(db_client: TestClient) -> None:
     """Inactive users cannot log in."""
     response = db_client.post(
         LOGIN_URL,
-        json={"email_or_username": INACTIVE_EMAIL, "password": ADMIN_PASSWORD},
+        json={"email_or_username": INACTIVE_EMAIL, "password": TEST_PASSWORD},
     )
     assert response.status_code == 403
     assert response.json()["error"]["code"] == "ACCOUNT_INACTIVE"
@@ -125,7 +125,7 @@ def test_cmc50_access_token_has_access_type(db_client: TestClient) -> None:
     settings = get_settings()
     response = db_client.post(
         LOGIN_URL,
-        json={"email_or_username": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+        json={"email_or_username": MEMBER_EMAIL, "password": TEST_PASSWORD},
     )
     token = response.json()["data"]["tokens"]["access_token"]
     payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
@@ -137,7 +137,7 @@ def test_cmc50_refresh_token_has_refresh_type(db_client: TestClient) -> None:
     settings = get_settings()
     response = db_client.post(
         LOGIN_URL,
-        json={"email_or_username": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+        json={"email_or_username": MEMBER_EMAIL, "password": TEST_PASSWORD},
     )
     token = response.json()["data"]["tokens"]["refresh_token"]
     payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
@@ -165,7 +165,7 @@ def test_cmc50_invalid_token_rejected() -> None:
 
 def test_cmc50_forgot_password_initiates_recovery(db_client: TestClient) -> None:
     """Forgot password returns generic success message."""
-    response = db_client.post(FORGOT_PASSWORD_URL, json={"email": ADMIN_EMAIL})
+    response = db_client.post(FORGOT_PASSWORD_URL, json={"email": MEMBER_EMAIL})
     assert response.status_code == 200
     assert "password reset link has been sent" in response.json()["data"]["message"].lower()
 
@@ -173,7 +173,7 @@ def test_cmc50_forgot_password_initiates_recovery(db_client: TestClient) -> None
 def test_cmc50_forgot_password_creates_reset_token_record(db_client: TestClient) -> None:
     """Forgot password persists a password reset token for registered users."""
     with patch("app.clients.klaviyo_client.KlaviyoClient.send_password_reset_email"):
-        db_client.post(FORGOT_PASSWORD_URL, json={"email": ADMIN_EMAIL})
+        db_client.post(FORGOT_PASSWORD_URL, json={"email": MEMBER_EMAIL})
 
     from app.models.user import User
 
@@ -182,7 +182,7 @@ def test_cmc50_forgot_password_creates_reset_token_record(db_client: TestClient)
     engine = create_engine(normalize_database_url(test_url))
     session = sessionmaker(bind=engine)()
     try:
-        user = session.scalar(select(User).where(User.email == ADMIN_EMAIL))
+        user = session.scalar(select(User).where(User.email == MEMBER_EMAIL))
         assert user is not None
         tokens = session.scalars(
             select(PasswordResetToken).where(PasswordResetToken.user_id == user.id)
@@ -197,7 +197,7 @@ def test_cmc50_forgot_password_email_case_insensitive(db_client: TestClient) -> 
     with patch("app.clients.klaviyo_client.KlaviyoClient.send_password_reset_email"):
         response = db_client.post(
             FORGOT_PASSWORD_URL,
-            json={"email": ADMIN_EMAIL.upper()},
+            json={"email": MEMBER_EMAIL.upper()},
         )
     assert response.status_code == 200
 

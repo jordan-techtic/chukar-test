@@ -107,27 +107,15 @@ _FORGOT_PASSWORD_RESPONSES = {
     description=(
         "Authenticate a marketing team member using their registered email or username "
         "and password. On success returns JWT access and refresh tokens plus a user summary. "
-        "Access is restricted to active users with the `marketing_team_member` role.
-
-"
-        "**Authentication:** Public — no Bearer token required.
-
-"
-        "**Rate limit:** 10 requests per minute per client IP.
-
-"
-        "**Stable error codes:**
-"
-        "- `INVALID_CREDENTIALS` (401) — unknown user or wrong password
-"
-        "- `ACCOUNT_INACTIVE` (403) — user exists but is deactivated
-"
-        "- `ACCESS_DENIED` (403) — user role is not marketing_team_member
-"
-        "- `VALIDATION_ERROR` (422) — missing or invalid request fields
-"
-        "- `RATE_LIMIT_EXCEEDED` (429) — too many login attempts
-"
+        "Access is restricted to active users with the `marketing_team_member` role.\n\n"
+        "**Authentication:** Public — no Bearer token required.\n\n"
+        "**Rate limit:** 10 requests per minute per client IP.\n\n"
+        "**Stable error codes:**\n"
+        "- `INVALID_CREDENTIALS` (401) — unknown user or wrong password\n"
+        "- `ACCOUNT_INACTIVE` (403) — user exists but is deactivated\n"
+        "- `ACCESS_DENIED` (403) — user role is not marketing_team_member\n"
+        "- `VALIDATION_ERROR` (422) — missing or invalid request fields\n"
+        "- `RATE_LIMIT_EXCEEDED` (429) — too many login attempts\n"
         "- `INTERNAL_SERVER_ERROR` (500) — unexpected server failure"
     ),
     tags=["marketing-team-member"],
@@ -161,25 +149,14 @@ async def marketing_team_member_login(
     description=(
         "Initiate the password recovery process for a registered email address. "
         "Always returns the same generic success message whether or not the email "
-        "is registered to prevent account enumeration.
-
-"
-        "**Authentication:** Public — no Bearer token required.
-
-"
-        "**Rate limit:** 10 requests per minute per client IP.
-
-"
+        "is registered to prevent account enumeration.\n\n"
+        "**Authentication:** Public — no Bearer token required.\n\n"
+        "**Rate limit:** 10 requests per minute per client IP.\n\n"
         "When a matching active marketing team member exists, a reset token is stored "
-        "and a Klaviyo event is dispatched to trigger the password reset email.
-
-"
-        "**Stable error codes:**
-"
-        "- `VALIDATION_ERROR` (422) — invalid or missing email format
-"
-        "- `RATE_LIMIT_EXCEEDED` (429) — too many recovery attempts
-"
+        "and a Klaviyo event is dispatched to trigger the password reset email.\n\n"
+        "**Stable error codes:**\n"
+        "- `VALIDATION_ERROR` (422) — invalid or missing email format\n"
+        "- `RATE_LIMIT_EXCEEDED` (429) — too many recovery attempts\n"
         "- `INTERNAL_SERVER_ERROR` (500) — unexpected server failure"
     ),
     tags=["marketing-team-member"],

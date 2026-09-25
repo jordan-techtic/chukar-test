@@ -3,13 +3,10 @@
 import importlib
 from pathlib import Path
 
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from pydantic import BaseModel, Field
 
 from app.core.config import get_settings
 from app.core.security import TOKEN_TYPE_ACCESS, create_access_token, decode_token
-from app.main import create_app
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -78,23 +75,12 @@ def test_cmc8_jwt_settings_loaded_from_env() -> None:
     assert settings.refresh_token_expire_days == 7
 
 
-def test_cmc8_validation_error_uses_standard_envelope() -> None:
+def test_cmc8_validation_error_uses_standard_envelope(client: TestClient) -> None:
     """Validation errors should use the standard error envelope with field details."""
-
-    class DemoRequest(BaseModel):
-        """Temporary schema used only to trigger validation in this test."""
-
-        password: str = Field(..., min_length=1, description="Required password field.")
-
-    test_app: FastAPI = create_app()
-
-    @test_app.post("/api/v1/_test/validation")
-    async def validation_demo(body: DemoRequest) -> dict[str, bool]:
-        return {"ok": True}
-
-    with TestClient(test_app) as validation_client:
-        response = validation_client.post("/api/v1/_test/validation", json={})
-
+    response = client.post(
+        "/api/v1/marketing-team-member/login",
+        json={"email_or_username": "user@test.com"},
+    )
     assert response.status_code == 422
     body = response.json()
     assert body["success"] is False

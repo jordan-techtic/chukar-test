@@ -2,8 +2,8 @@
 
 import os
 import secrets
-import uuid
 from collections.abc import Generator
+from pathlib import Path
 from unittest.mock import patch
 from urllib.parse import quote_plus
 
@@ -17,13 +17,31 @@ from app.core.security import create_access_token, hash_password
 from app.db.base import Base
 from app.db.database_url import normalize_database_url
 from app.db.session import get_db
-from app.main import create_app
 from app.models.user import MARKETING_TEAM_MEMBER_ROLE, User
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 LOGIN_URL = "/api/v1/marketing-team-member/login"
 FORGOT_PASSWORD_URL = "/api/v1/marketing-team-member/forgot-password"
 HEALTH_URL = "/api/v1/health"
 PROTECTED_PROBE_URL = "/api/v1/internal/protected-probe"
+
+
+def _load_env_file(relative_path: str) -> None:
+    """Load KEY=VALUE pairs from a dotenv file without overriding existing env vars."""
+    env_path = PROJECT_ROOT / relative_path
+    if not env_path.is_file():
+        return
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+_load_env_file(".env.test")
+_load_env_file(".env")
 
 
 def _build_postgres_url(database: str) -> str:
@@ -157,8 +175,12 @@ def db_client(test_engine, db_session_factory) -> Generator[TestClient, None, No
         finally:
             db.close()
 
+    from app.main import create_app
+
     get_settings.cache_clear()
     app = create_app()
+    if hasattr(app.state, "limiter"):
+        app.state.limiter.enabled = False
     app.dependency_overrides[get_db] = override_get_db
 
     with testing_session() as db:
@@ -178,8 +200,13 @@ def db_client(test_engine, db_session_factory) -> Generator[TestClient, None, No
 @pytest.fixture
 def client() -> Generator[TestClient, None, None]:
     """Provide a FastAPI TestClient without database overrides (health/docs tests)."""
+    from app.main import create_app
+
     get_settings.cache_clear()
-    with TestClient(create_app()) as test_client:
+    app = create_app()
+    if hasattr(app.state, "limiter"):
+        app.state.limiter.enabled = False
+    with TestClient(app) as test_client:
         yield test_client
 
 

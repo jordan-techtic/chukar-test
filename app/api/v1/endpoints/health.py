@@ -25,12 +25,8 @@ router = APIRouter()
     description=(
         "Returns the current health status of the API service. "
         "Use this endpoint for load balancer probes, uptime monitoring, "
-        "and deployment verification.
-
-"
-        "**Authentication:** Public — no Bearer token required.
-
-"
+        "and deployment verification.\n\n"
+        "**Authentication:** Public — no Bearer token required.\n\n"
         "**Rate limit:** 60 requests per minute per client IP."
     ),
     tags=["health"],

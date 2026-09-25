@@ -159,7 +159,11 @@ def test_cmc50_ac_api_contract_supports_frontend_login(client: TestClient) -> No
     """[CMC-50] OpenAPI documents login request/response shapes for frontend integration."""
     schema = client.get("/openapi.json").json()
     login_path = schema["paths"][LOGIN_URL]["post"]
-    assert "email_or_username" in str(login_path)
+    login_request_schema = schema["components"]["schemas"]["LoginRequest"]
+    properties = login_request_schema.get("properties", {})
+    assert "email_or_username" in properties
+    assert "password" in properties
+    assert login_path.get("requestBody") is not None
     assert _openapi_has_success_envelope(schema)
 
 
