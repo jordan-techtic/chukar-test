@@ -1,56 +1,82 @@
-"""Shared pytest fixtures."""
+"""Shared pytest fixtures for integration and unit tests."""
 
 import os
 from collections.abc import Generator
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 from urllib.parse import urlparse, urlunparse
 
 import pytest
 from fastapi.testclient import TestClient
+from jose import jwt
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-# Set required environment variables before application imports.
+# Environment defaults before application imports.
 os.environ.setdefault(
     "DATABASE_URL",
-    "postgresql://postgres:root@127.0.0.1:5432/marketing_cal",
+    os.environ.get("DATABASE_URL", "postgresql://postgres:root@127.0.0.1:5432/marketing_cal"),
 )
 os.environ.setdefault(
     "TEST_DATABASE_URL",
-    "postgresql://postgres:root@127.0.0.1:5432/marketing_cal_test",
+    os.environ.get("TEST_DATABASE_URL", "postgresql://postgres:root@127.0.0.1:5432/marketing_cal_test"),
 )
-os.environ.setdefault(
-    "JWT_SECRET",
-    "test-jwt-secret-key-for-pytest-only-minimum-length",
-)
+os.environ.setdefault("JWT_SECRET", "test-jwt-secret-key-for-pytest-only-minimum-length")
 os.environ.setdefault("JWT_ALGORITHM", "HS256")
 os.environ.setdefault("ACCESS_TOKEN_EXPIRE_MINUTES", "30")
 os.environ.setdefault("REFRESH_TOKEN_EXPIRE_DAYS", "7")
 os.environ.setdefault("AUTH_STRATEGY", "jwt")
-os.environ.setdefault(
-    "CORS_ORIGINS",
-    '["http://localhost:3000"]',
-)
+os.environ.setdefault("CORS_ORIGINS", '["http://localhost:3000"]')
 os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("KLAVIYO_API_KEY", "pk_test_key")
-os.environ.setdefault(
-    "FRONTEND_RESET_URL",
-    "http://localhost:3000/reset-password",
-)
+os.environ.setdefault("FRONTEND_RESET_URL", "http://localhost:3000/reset-password")
 
 from app.core.config import get_settings  # noqa: E402
-from app.core.security import hash_password  # noqa: E402
+from app.core.security import (  # noqa: E402
+    TOKEN_TYPE_ACCESS,
+    create_access_token,
+    hash_password,
+)
 from app.db.base import Base  # noqa: E402
 from app.db.session import get_db  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models.user import MARKETING_TEAM_MEMBER_ROLE, User  # noqa: E402
 
+# --- Test user credentials (5 distinct users) ---
+ADMIN_EMAIL = "admin@test.com"
+ADMIN_USERNAME = "admin_user"
+ADMIN_PASSWORD = "TestAdmin123!"
+
+REGULAR_EMAIL = "user@test.com"
+REGULAR_USERNAME = "regular_user"
+REGULAR_PASSWORD = "TestUser123!"
+
+VIEWER_EMAIL = "viewer@test.com"
+VIEWER_USERNAME = "viewer_user"
+VIEWER_PASSWORD = "TestViewer123!"
+
+INACTIVE_EMAIL = "inactive@test.com"
+INACTIVE_USERNAME = "inactive_user"
+INACTIVE_PASSWORD = "TestInactive123!"
+
+NEW_USER_EMAIL = "newuser@test.com"
+NEW_USER_PASSWORD = "NewUser123!"
+
+
+def _sync_postgres_url(url: str) -> str:
+    """Force psycopg2 driver for SQLAlchemy test engines."""
+    if url.startswith("postgresql://"):
+        return url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    if url.startswith("postgres://"):
+        return url.replace("postgres://", "postgresql+psycopg2://", 1)
+    return url
+
 
 def _postgres_available(database_url: str) -> bool:
     """Return True if PostgreSQL is reachable."""
     try:
-        engine = create_engine(database_url, pool_pre_ping=True)
+        engine = create_engine(_sync_postgres_url(database_url), pool_pre_ping=True)
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
         engine.dispose()
@@ -60,23 +86,16 @@ def _postgres_available(database_url: str) -> bool:
 
 
 def _resolve_test_database_url() -> str:
-    """Return a dedicated test database URL, never the dev database."""
+    """Return dedicated test database URL, never the dev database."""
     explicit = os.environ.get("TEST_DATABASE_URL", "").strip()
     if explicit:
         return explicit
-
-    base_url = os.environ.get(
-        "DATABASE_URL",
-        "postgresql://postgres:root@127.0.0.1:5432/marketing_cal",
-    )
+    base_url = os.environ["DATABASE_URL"]
     parsed = urlparse(base_url)
     db_name = parsed.path.lstrip("/") or "marketing_cal"
     if db_name.endswith("_test"):
         return base_url
-
-    test_db_name = f"{db_name}_test"
-    test_path = f"/{test_db_name}"
-    return urlunparse(parsed._replace(path=test_path))
+    return urlunparse(parsed._replace(path=f"/{db_name}_test"))
 
 
 def _assert_safe_test_database(database_url: str) -> None:
@@ -84,29 +103,41 @@ def _assert_safe_test_database(database_url: str) -> None:
     db_name = urlparse(database_url).path.lstrip("/")
     if not db_name.endswith("_test"):
         pytest.skip(
-            "Integration tests require a dedicated test database URL "
-            f"(database name must end with '_test', got '{db_name}'). "
-            "Set TEST_DATABASE_URL to a separate database."
+            f"Integration tests require database name ending with '_test', got '{db_name}'"
         )
+
+
+def _insert_user(
+    session: Session,
+    *,
+    email: str,
+    username: str,
+    password: str,
+    role: str,
+    is_active: bool,
+) -> User:
+    """Insert a user into the current test transaction."""
+    user = User(
+        email=email.lower(),
+        username=username.lower(),
+        password_hash=hash_password(password),
+        is_active=is_active,
+        role=role,
+    )
+    session.add(user)
+    session.flush()
+    session.refresh(user)
+    return user
 
 
 @pytest.fixture(scope="session")
 def postgres_engine():
-    """Session-scoped PostgreSQL engine against a dedicated test database.
-
-    Schema is created once if missing. Each test uses transaction rollbacks
-    via db_session — tables are never dropped on teardown.
-    """
+    """Session-scoped PostgreSQL engine; schema created once, never dropped."""
     database_url = _resolve_test_database_url()
     _assert_safe_test_database(database_url)
-
     if not _postgres_available(database_url):
-        pytest.skip(
-            "PostgreSQL test database not available for integration tests. "
-            f"Expected reachable database at: {database_url}"
-        )
-
-    engine = create_engine(database_url, pool_pre_ping=True)
+        pytest.skip(f"PostgreSQL test database unavailable at {database_url}")
+    engine = create_engine(_sync_postgres_url(database_url), pool_pre_ping=True)
     Base.metadata.create_all(bind=engine)
     yield engine
     engine.dispose()
@@ -114,7 +145,7 @@ def postgres_engine():
 
 @pytest.fixture
 def db_session(postgres_engine) -> Generator[Session, None, None]:
-    """Yield a transactional database session rolled back after each test."""
+    """Transactional session rolled back after each test (truncate via rollback)."""
     connection = postgres_engine.connect()
     transaction = connection.begin()
     session = Session(bind=connection)
@@ -125,40 +156,83 @@ def db_session(postgres_engine) -> Generator[Session, None, None]:
 
 
 @pytest.fixture
-def seed_user(db_session: Session) -> User:
-    """Create an active marketing team member in the test database."""
-    user = User(
-        email="marketing.user@example.com",
-        username="marketing_user",
-        password_hash=hash_password("SecurePass1!"),
-        is_active=True,
+def admin_user(db_session: Session) -> User:
+    """Active marketing team member — primary authorized user (admin equivalent)."""
+    return _insert_user(
+        db_session,
+        email=ADMIN_EMAIL,
+        username=ADMIN_USERNAME,
+        password=ADMIN_PASSWORD,
         role=MARKETING_TEAM_MEMBER_ROLE,
+        is_active=True,
     )
-    db_session.add(user)
-    db_session.flush()
-    db_session.refresh(user)
-    return user
+
+
+@pytest.fixture
+def regular_user(db_session: Session) -> User:
+    """Active marketing team member — standard authorized user."""
+    return _insert_user(
+        db_session,
+        email=REGULAR_EMAIL,
+        username=REGULAR_USERNAME,
+        password=REGULAR_PASSWORD,
+        role=MARKETING_TEAM_MEMBER_ROLE,
+        is_active=True,
+    )
+
+
+@pytest.fixture
+def viewer_user(db_session: Session) -> User:
+    """Active user with wrong role — read-only/unauthorized for this app."""
+    return _insert_user(
+        db_session,
+        email=VIEWER_EMAIL,
+        username=VIEWER_USERNAME,
+        password=VIEWER_PASSWORD,
+        role="viewer",
+        is_active=True,
+    )
 
 
 @pytest.fixture
 def inactive_user(db_session: Session) -> User:
-    """Create an inactive marketing team member in the test database."""
-    user = User(
-        email="inactive.user@example.com",
-        username="inactive_user",
-        password_hash=hash_password("SecurePass1!"),
-        is_active=False,
+    """Inactive marketing team member — account exists but deactivated."""
+    return _insert_user(
+        db_session,
+        email=INACTIVE_EMAIL,
+        username=INACTIVE_USERNAME,
+        password=INACTIVE_PASSWORD,
         role=MARKETING_TEAM_MEMBER_ROLE,
+        is_active=False,
     )
-    db_session.add(user)
-    db_session.flush()
-    db_session.refresh(user)
-    return user
+
+
+@pytest.fixture
+def new_user_credentials() -> dict:
+    """Credentials for a user not yet in the database (registration/forgot-password tests)."""
+    return {
+        "email": NEW_USER_EMAIL,
+        "username": "new_user",
+        "password": NEW_USER_PASSWORD,
+        "role": MARKETING_TEAM_MEMBER_ROLE,
+        "is_active": True,
+    }
+
+
+@pytest.fixture
+def all_db_users(admin_user, regular_user, viewer_user, inactive_user) -> dict[str, User]:
+    """All four persisted test users keyed by fixture name."""
+    return {
+        "admin": admin_user,
+        "regular": regular_user,
+        "viewer": viewer_user,
+        "inactive": inactive_user,
+    }
 
 
 @pytest.fixture
 def client() -> Generator[TestClient, None, None]:
-    """Return a basic FastAPI test client without database override."""
+    """Basic TestClient without DB override (health/docs tests)."""
     get_settings.cache_clear()
     yield TestClient(app)
     get_settings.cache_clear()
@@ -166,7 +240,7 @@ def client() -> Generator[TestClient, None, None]:
 
 @pytest.fixture
 def db_client(db_session: Session) -> Generator[TestClient, None, None]:
-    """Return a FastAPI test client with database session override."""
+    """TestClient with get_db overridden to transactional test session."""
 
     def _override_get_db() -> Generator[Session, None, None]:
         try:
@@ -185,26 +259,55 @@ def db_client(db_session: Session) -> Generator[TestClient, None, None]:
 
 @pytest.fixture
 def mock_klaviyo_client(monkeypatch) -> MagicMock:
-    """Mock KlaviyoClient to prevent external API calls in tests."""
+    """Mock KlaviyoClient — no real HTTP calls to Klaviyo."""
     mock = MagicMock()
     mock.send_password_reset_email.return_value = None
-    monkeypatch.setattr(
-        "app.services.auth_service.KlaviyoClient",
-        lambda settings: mock,
-    )
+    monkeypatch.setattr("app.services.auth_service.KlaviyoClient", lambda settings: mock)
     return mock
 
 
 @pytest.fixture
 def settings():
-    """Return application settings with a cleared cache."""
+    """Application settings with cleared cache."""
     get_settings.cache_clear()
     return get_settings()
 
 
 @pytest.fixture
+def admin_access_token(admin_user, settings) -> str:
+    """JWT access token for admin marketing team member."""
+    return create_access_token({"sub": str(admin_user.id)}, settings)
+
+
+@pytest.fixture
+def regular_access_token(regular_user, settings) -> str:
+    """JWT access token for regular marketing team member."""
+    return create_access_token({"sub": str(regular_user.id)}, settings)
+
+
+@pytest.fixture
+def auth_headers_admin(admin_access_token) -> dict[str, str]:
+    """Authorization header for admin user Bearer token."""
+    return {"Authorization": f"Bearer {admin_access_token}"}
+
+
+@pytest.fixture
+def auth_headers_regular(regular_access_token) -> dict[str, str]:
+    """Authorization header for regular user Bearer token."""
+    return {"Authorization": f"Bearer {regular_access_token}"}
+
+
+@pytest.fixture
+def expired_access_token(admin_user, settings) -> str:
+    """Expired JWT access token for auth rejection tests."""
+    expire = datetime.now(timezone.utc) - timedelta(minutes=5)
+    payload = {"sub": str(admin_user.id), "exp": expire, "type": TOKEN_TYPE_ACCESS}
+    return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+
+
+@pytest.fixture
 def sqlite_session() -> Generator[Session, None, None]:
-    """In-memory SQLite session for unit tests that need a real Session."""
+    """In-memory SQLite session for unit tests (non-PostgreSQL)."""
     engine = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -215,3 +318,10 @@ def sqlite_session() -> Generator[Session, None, None]:
     yield session
     session.close()
     Base.metadata.drop_all(bind=engine)
+
+
+# Backward-compatible alias used by older tests
+@pytest.fixture
+def seed_user(admin_user) -> User:
+    """Alias for admin_user fixture."""
+    return admin_user
