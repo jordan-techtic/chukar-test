@@ -3,6 +3,7 @@
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -12,11 +13,52 @@ from app.core.config import get_settings
 from app.core.logging import logger, setup_logging
 from app.core.rate_limit import configure_rate_limiting, limiter
 from app.exceptions.http_exceptions import AppHTTPException
-from app.middleware.auth_middleware import AuthMiddleware
+from app.middleware.auth_middleware import AuthMiddleware, PUBLIC_PATHS
 from app.middleware.logging_middleware import LoggingMiddleware
 from app.schemas.responses import ErrorDetail, ErrorResponse, ValidationErrorItem
 
 settings = get_settings()
+
+BEARER_AUTH_SCHEME = "BearerAuth"
+
+
+def _configure_openapi(app: FastAPI) -> None:
+    """Attach a custom OpenAPI schema with JWT Bearer security documentation."""
+
+    def custom_openapi() -> dict:
+        if app.openapi_schema:
+            return app.openapi_schema
+
+        schema = get_openapi(
+            title=app.title,
+            version=app.version,
+            description=app.description,
+            routes=app.routes,
+        )
+
+        schema.setdefault("components", {}).setdefault("securitySchemes", {})[
+            BEARER_AUTH_SCHEME
+        ] = {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+            "description": (
+                "JWT access token obtained from "
+                "POST /api/v1/marketing-team-member/login (`data.tokens.access_token`)."
+            ),
+        }
+
+        for path, path_item in schema.get("paths", {}).items():
+            if path in PUBLIC_PATHS:
+                for operation in path_item.values():
+                    if isinstance(operation, dict):
+                        operation["security"] = []
+
+        schema["security"] = [{BEARER_AUTH_SCHEME: []}]
+        app.openapi_schema = schema
+        return app.openapi_schema
+
+    app.openapi = custom_openapi  # type: ignore[method-assign]
 
 
 def create_app() -> FastAPI:
@@ -25,7 +67,11 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="Marketing Content Calendar API",
-        description="Backend API for the Marketing Content Calendar application.",
+        description=(
+            "Backend API for the Marketing Content Calendar application. "
+            "Public auth endpoints (login, forgot-password, health) require no token. "
+            "All other routes require a Bearer JWT access token."
+        ),
         version="0.1.0",
         docs_url="/docs",
         redoc_url="/redoc",
@@ -44,6 +90,7 @@ def create_app() -> FastAPI:
     app.add_middleware(AuthMiddleware)
 
     configure_rate_limiting(app)
+    _configure_openapi(app)
 
     @app.exception_handler(AppHTTPException)
     async def app_http_exception_handler(

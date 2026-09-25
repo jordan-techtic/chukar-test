@@ -46,6 +46,44 @@ class HealthData(BaseModel):
     status: str = Field(..., description="Service health status.", examples=["OK"])
 
 
+OPENAPI_SUCCESS_EXAMPLE_HEALTH: dict[str, Any] = {
+    "success": True,
+    "message": "Service is healthy.",
+    "data": {"status": "OK"},
+}
+
+OPENAPI_SUCCESS_EXAMPLE_LOGIN: dict[str, Any] = {
+    "success": True,
+    "message": "Login successful.",
+    "data": {
+        "tokens": {
+            "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.access.example",
+            "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh.example",
+            "token_type": "bearer",
+        },
+        "user": {
+            "id": "550e8400-e29b-41d4-a716-446655440000",
+            "email": "marketing.user@example.com",
+            "username": "marketing_user",
+            "role": "marketing_team_member",
+        },
+    },
+}
+
+OPENAPI_SUCCESS_EXAMPLE_FORGOT_PASSWORD: dict[str, Any] = {
+    "success": True,
+    "message": "If an account exists for this email, a password reset link has been sent.",
+    "data": {
+        "message": "If an account exists for this email, a password reset link has been sent.",
+    },
+}
+
+OPENAPI_ERROR_EXAMPLE_UNAUTHORIZED: dict[str, Any] = {
+    "success": False,
+    "message": "Authentication required.",
+    "error": {"code": "UNAUTHORIZED", "details": None},
+}
+
 OPENAPI_ERROR_EXAMPLE_INVALID_CREDENTIALS: dict[str, Any] = {
     "success": False,
     "message": "Invalid email/username or password.",
@@ -98,6 +136,43 @@ def openapi_error_response(
             "content": {
                 "application/json": {
                     "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                    "example": example,
+                }
+            },
+        }
+    }
+
+
+def openapi_error_response_examples(
+    status_code: int,
+    description: str,
+    examples: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Build an OpenAPI response entry with multiple named error examples."""
+    return {
+        status_code: {
+            "description": description,
+            "content": {
+                "application/json": {
+                    "schema": {"$ref": "#/components/schemas/ErrorResponse"},
+                    "examples": examples,
+                }
+            },
+        }
+    }
+
+
+def openapi_success_response(
+    status_code: int,
+    description: str,
+    example: dict[str, Any],
+) -> dict[str, Any]:
+    """Build an OpenAPI response entry documenting a success payload example."""
+    return {
+        status_code: {
+            "description": description,
+            "content": {
+                "application/json": {
                     "example": example,
                 }
             },
