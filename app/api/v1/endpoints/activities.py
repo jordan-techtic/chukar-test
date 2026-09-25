@@ -299,12 +299,12 @@ async def get_activity(
 @limiter.limit("30/minute")
 async def update_activity(
     request: Request,
+    body: UpdateActivityRequest,
     activity_id: uuid.UUID = Path(
         ...,
         description="UUID of the marketing activity.",
         examples=["550e8400-e29b-41d4-a716-446655440000"],
     ),
-    body: UpdateActivityRequest,
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
     current_user: User = Depends(get_current_user),
