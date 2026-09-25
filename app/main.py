@@ -11,7 +11,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.logging import logger, setup_logging
-from app.core.rate_limit import limiter
+from app.core.rate_limit import configure_rate_limiting, limiter
 from app.exceptions.http_exceptions import AppHTTPException
 from app.middleware.auth_middleware import AuthMiddleware
 from app.middleware.logging_middleware import LoggingMiddleware
@@ -179,6 +179,7 @@ def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     setup_logging()
     settings = get_settings()
+    configure_rate_limiting(settings)
 
     app = FastAPI(
         title="Marketing Content Calendar API",
@@ -216,7 +217,11 @@ def create_app() -> FastAPI:
         """Root redirect info."""
         return {"message": "Marketing Content Calendar API", "docs": "/docs"}
 
-    logger.info("Application started in {} environment", settings.environment)
+    logger.info(
+        "Application started in {} environment (rate limiting: {})",
+        settings.environment,
+        "on" if settings.rate_limiting_active else "off",
+    )
     return app
 
 

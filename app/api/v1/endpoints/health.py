@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, Request, status
 
+from app.core.config import get_settings
 from app.core.rate_limit import limiter
 from app.schemas.responses import (
     OPENAPI_ERROR_EXAMPLE_INTERNAL,
@@ -52,7 +53,7 @@ router = APIRouter()
     tags=["health"],
     openapi_extra={"security": []},
 )
-@limiter.limit("100/minute")
+@limiter.limit(lambda: get_settings().rate_limit_health)
 async def health_check(request: Request) -> SuccessResponse[HealthData]:
     """Return service health status."""
     return SuccessResponse[HealthData](

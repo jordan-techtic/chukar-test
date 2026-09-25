@@ -1,18 +1,13 @@
 """Rate limiting configuration using slowapi."""
 
-import os
-
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
+from app.core.config import Settings
 
-def _is_rate_limit_enabled() -> bool:
-    """Return True unless rate limiting is explicitly disabled via env."""
-    value = os.environ.get("RATE_LIMIT_ENABLED", "true").strip().lower()
-    return value not in {"0", "false", "no", "off"}
+limiter = Limiter(key_func=get_remote_address, enabled=True)
 
 
-limiter = Limiter(
-    key_func=get_remote_address,
-    enabled=_is_rate_limit_enabled(),
-)
+def configure_rate_limiting(settings: Settings) -> None:
+    """Apply rate-limit on/off from application settings."""
+    limiter.enabled = settings.rate_limiting_active

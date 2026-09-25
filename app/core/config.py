@@ -91,6 +91,48 @@ class Settings(BaseSettings):
         validation_alias="RATE_LIMIT_DEFAULT",
         description="Default rate limit for API endpoints.",
     )
+    rate_limit_enabled: bool | None = Field(
+        default=None,
+        validation_alias="RATE_LIMIT_ENABLED",
+        description=(
+            "Override rate limiting on/off. When unset, disabled in "
+            "development/test environments."
+        ),
+    )
+    rate_limit_login: str = Field(
+        default="60/minute",
+        validation_alias="RATE_LIMIT_LOGIN",
+        description="Rate limit for marketing team member login.",
+    )
+    rate_limit_forgot_password: str = Field(
+        default="30/minute",
+        validation_alias="RATE_LIMIT_FORGOT_PASSWORD",
+        description="Rate limit for forgot-password requests.",
+    )
+    rate_limit_health: str = Field(
+        default="100/minute",
+        validation_alias="RATE_LIMIT_HEALTH",
+        description="Rate limit for health check endpoint.",
+    )
+
+    @property
+    def rate_limiting_active(self) -> bool:
+        """Return whether slowapi rate limiting should enforce limits."""
+        if self.rate_limit_enabled is not None:
+            return self.rate_limit_enabled
+        return self.environment.lower() not in {"development", "test"}
+
+    @field_validator("rate_limit_enabled", mode="before")
+    @classmethod
+    def parse_rate_limit_enabled(cls, value: Any) -> bool | None:
+        """Parse optional RATE_LIMIT_ENABLED env value."""
+        if value is None or value == "":
+            return None
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            return value.strip().lower() not in {"0", "false", "no", "off"}
+        return bool(value)
 
     @field_validator("cors_origins", mode="before")
     @classmethod

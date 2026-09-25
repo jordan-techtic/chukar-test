@@ -131,7 +131,7 @@ _FORGOT_PASSWORD_ERROR_RESPONSES = {
     },
     openapi_extra={"security": []},
 )
-@limiter.limit("10/minute")
+@limiter.limit(lambda: get_settings().rate_limit_login)
 async def login(
     request: Request,
     body: LoginRequest,
@@ -188,7 +188,7 @@ async def login(
     },
     openapi_extra={"security": []},
 )
-@limiter.limit("5/minute")
+@limiter.limit(lambda: get_settings().rate_limit_forgot_password)
 async def forgot_password(
     request: Request,
     body: ForgotPasswordRequest,
