@@ -3,8 +3,8 @@
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
-from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
@@ -16,6 +16,7 @@ from app.exceptions.http_exceptions import AppHTTPException
 from app.middleware.auth_middleware import AuthMiddleware
 from app.middleware.logging_middleware import LoggingMiddleware
 from app.schemas.responses import ErrorDetail, ErrorResponse, ValidationErrorItem
+
 
 def _build_error_response(
     message: str,
@@ -104,6 +105,22 @@ def register_exception_handlers(app: FastAPI) -> None:
             ),
         )
 
+    @app.exception_handler(RateLimitExceeded)
+    async def rate_limit_exception_handler(
+        request: Request,
+        exc: RateLimitExceeded,
+    ) -> JSONResponse:
+        """Return standard error envelope for rate limit violations."""
+        logger.warning("Rate limit exceeded on {}", request.url.path)
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content=_build_error_response(
+                message="Rate limit exceeded. Please try again later.",
+                code="RATE_LIMIT_EXCEEDED",
+                details=None,
+            ),
+        )
+
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(
         request: Request,
@@ -119,6 +136,43 @@ def register_exception_handlers(app: FastAPI) -> None:
                 details=None,
             ),
         )
+
+
+def _custom_openapi(app: FastAPI) -> dict:
+    """Generate OpenAPI schema with Bearer JWT security scheme documented."""
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+    openapi_schema.setdefault("components", {}).setdefault("securitySchemes", {})
+    openapi_schema["components"]["securitySchemes"]["BearerAuth"] = {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": (
+            "JWT access token obtained from POST /api/v1/marketing-team-member/login. "
+            "Send as: Authorization: Bearer <access_token>"
+        ),
+    }
+    openapi_schema.setdefault("tags", []).extend(
+        [
+            {
+                "name": "health",
+                "description": "Service health and uptime probes.",
+            },
+            {
+                "name": "marketing-team-member",
+                "description": "Authentication for marketing team members.",
+            },
+        ]
+    )
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
 
 
 def create_app() -> FastAPI:
@@ -140,7 +194,6 @@ def create_app() -> FastAPI:
     )
 
     app.state.limiter = limiter
-    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     app.add_middleware(SlowAPIMiddleware)
 
     register_exception_handlers(app)
@@ -156,6 +209,7 @@ def create_app() -> FastAPI:
     app.add_middleware(AuthMiddleware)
 
     app.include_router(api_router, prefix="/api/v1")
+    app.openapi = lambda: _custom_openapi(app)
 
     @app.get("/", include_in_schema=False)
     async def root() -> dict:

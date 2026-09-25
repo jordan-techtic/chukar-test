@@ -12,32 +12,76 @@ from app.schemas.marketing_team_member import (
     LoginData,
     LoginRequest,
 )
-from app.schemas.responses import ErrorResponse, SuccessResponse
+from app.schemas.responses import (
+    OPENAPI_ERROR_EXAMPLE_ACCESS_DENIED,
+    OPENAPI_ERROR_EXAMPLE_ACCOUNT_INACTIVE,
+    OPENAPI_ERROR_EXAMPLE_INTERNAL,
+    OPENAPI_ERROR_EXAMPLE_INVALID_CREDENTIALS,
+    OPENAPI_ERROR_EXAMPLE_RATE_LIMIT,
+    OPENAPI_ERROR_EXAMPLE_VALIDATION,
+    ErrorResponse,
+    SuccessResponse,
+    openapi_error_response,
+)
 from app.services.auth_service import AuthService
 
 router = APIRouter(prefix="/marketing-team-member", tags=["marketing-team-member"])
 
-_ERROR_RESPONSES = {
-    401: {
-        "description": "Invalid credentials or missing authentication.",
-        "model": ErrorResponse,
-    },
-    403: {
-        "description": "Account inactive or access denied.",
-        "model": ErrorResponse,
-    },
-    422: {
-        "description": "Validation error.",
-        "model": ErrorResponse,
-    },
-    429: {
-        "description": "Rate limit exceeded.",
-        "model": ErrorResponse,
-    },
-    500: {
-        "description": "Internal server error.",
-        "model": ErrorResponse,
-    },
+_PUBLIC_SECURITY: list[dict[str, list[str]]] = []
+
+_LOGIN_ERROR_RESPONSES = {
+    **openapi_error_response(
+        401,
+        "Invalid credentials.",
+        example=OPENAPI_ERROR_EXAMPLE_INVALID_CREDENTIALS,
+    ),
+    **openapi_error_response(
+        403,
+        "Account inactive or role not authorized.",
+        examples={
+            "account_inactive": {
+                "summary": "Inactive account",
+                "value": OPENAPI_ERROR_EXAMPLE_ACCOUNT_INACTIVE,
+            },
+            "access_denied": {
+                "summary": "Wrong role",
+                "value": OPENAPI_ERROR_EXAMPLE_ACCESS_DENIED,
+            },
+        },
+    ),
+    **openapi_error_response(
+        422,
+        "Request validation failed.",
+        example=OPENAPI_ERROR_EXAMPLE_VALIDATION,
+    ),
+    **openapi_error_response(
+        429,
+        "Rate limit exceeded.",
+        example=OPENAPI_ERROR_EXAMPLE_RATE_LIMIT,
+    ),
+    **openapi_error_response(
+        500,
+        "Internal server error.",
+        example=OPENAPI_ERROR_EXAMPLE_INTERNAL,
+    ),
+}
+
+_FORGOT_PASSWORD_ERROR_RESPONSES = {
+    **openapi_error_response(
+        422,
+        "Request validation failed.",
+        example=OPENAPI_ERROR_EXAMPLE_VALIDATION,
+    ),
+    **openapi_error_response(
+        429,
+        "Rate limit exceeded.",
+        example=OPENAPI_ERROR_EXAMPLE_RATE_LIMIT,
+    ),
+    **openapi_error_response(
+        500,
+        "Internal server error.",
+        example=OPENAPI_ERROR_EXAMPLE_INTERNAL,
+    ),
 }
 
 
@@ -48,9 +92,19 @@ _ERROR_RESPONSES = {
     summary="Marketing team member login",
     description=(
         "Authenticate a marketing team member using their registered email or "
-        "username and password. Returns JWT access and refresh tokens on success. "
-        "Access is restricted to active users with the marketing_team_member role."
+        "username and password. On success returns JWT access and refresh tokens "
+        "plus a user summary. Access is restricted to active users with the "
+        "marketing_team_member role.\n\n"
+        "**Authentication:** Public — no Bearer token required.\n\n"
+        "**Stable error codes:**\n"
+        "- `INVALID_CREDENTIALS` (401) — unknown user or wrong password\n"
+        "- `ACCOUNT_INACTIVE` (403) — user exists but is deactivated\n"
+        "- `ACCESS_DENIED` (403) — user role is not marketing_team_member\n"
+        "- `VALIDATION_ERROR` (422) — missing or invalid request fields\n"
+        "- `RATE_LIMIT_EXCEEDED` (429) — too many login attempts\n"
+        "- `INTERNAL_SERVER_ERROR` (500) — unexpected server failure"
     ),
+    operation_id="marketingTeamMemberLogin",
     responses={
         200: {
             "description": "Login successful.",
@@ -74,8 +128,9 @@ _ERROR_RESPONSES = {
                 }
             },
         },
-        **_ERROR_RESPONSES,
+        **_LOGIN_ERROR_RESPONSES,
     },
+    openapi_extra={"security": []},
 )
 @limiter.limit("10/minute")
 async def login(
@@ -102,9 +157,16 @@ async def login(
     description=(
         "Initiate the forgot-password flow for a registered email address. "
         "If an active marketing team member account exists, a password reset "
-        "email is sent via Klaviyo. The response is always generic to prevent "
-        "email enumeration."
+        "email is sent via Klaviyo. The HTTP 200 response is always generic "
+        "to prevent email enumeration — the same body is returned for unknown, "
+        "inactive, or unauthorized emails (no email is sent in those cases).\n\n"
+        "**Authentication:** Public — no Bearer token required.\n\n"
+        "**Stable error codes:**\n"
+        "- `VALIDATION_ERROR` (422) — invalid email format or missing field\n"
+        "- `RATE_LIMIT_EXCEEDED` (429) — too many recovery requests\n"
+        "- `INTERNAL_SERVER_ERROR` (500) — unexpected server failure"
     ),
+    operation_id="marketingTeamMemberForgotPassword",
     responses={
         200: {
             "description": "Password recovery initiated (generic response).",
@@ -123,10 +185,9 @@ async def login(
                 }
             },
         },
-        422: _ERROR_RESPONSES[422],
-        429: _ERROR_RESPONSES[429],
-        500: _ERROR_RESPONSES[500],
+        **_FORGOT_PASSWORD_ERROR_RESPONSES,
     },
+    openapi_extra={"security": []},
 )
 @limiter.limit("5/minute")
 async def forgot_password(
