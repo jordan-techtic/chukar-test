@@ -44,6 +44,7 @@ os.environ.setdefault("REFRESH_TOKEN_EXPIRE_DAYS", "7")
 os.environ.setdefault("AUTH_STRATEGY", "jwt")
 os.environ.setdefault("CORS_ORIGINS", '["http://localhost:3000"]')
 os.environ.setdefault("ENVIRONMENT", "test")
+os.environ["RATE_LIMIT_ENABLED"] = "false"
 os.environ.setdefault("KLAVIYO_API_KEY", "pk_test_key")
 os.environ.setdefault("FRONTEND_RESET_URL", "http://localhost:3000/reset-password")
 
@@ -239,6 +240,17 @@ def all_db_users(admin_user, regular_user, viewer_user, inactive_user) -> dict[s
         "viewer": viewer_user,
         "inactive": inactive_user,
     }
+
+
+@pytest.fixture(autouse=True)
+def _disable_rate_limiting() -> Generator[None, None, None]:
+    """Prevent slowapi shared counters from causing 429s across TestClient calls."""
+    from app.core.rate_limit import limiter
+
+    previous = limiter.enabled
+    limiter.enabled = False
+    yield
+    limiter.enabled = previous
 
 
 @pytest.fixture
