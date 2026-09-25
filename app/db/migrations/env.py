@@ -9,6 +9,7 @@ from sqlalchemy import engine_from_config, pool
 import app.models  # noqa: F401
 from app.core.config import get_settings
 from app.db.base import Base
+from app.db.database_url import normalize_database_url
 
 config = context.config
 
@@ -17,24 +18,10 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-
-def _sync_database_url(url: str) -> str:
-    """Return a sync PostgreSQL URL using psycopg2 for Alembic migrations."""
-    if url.startswith("postgresql+asyncpg://"):
-        return url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
-    if url.startswith("postgresql+psycopg://"):
-        return url.replace("postgresql+psycopg://", "postgresql+psycopg2://", 1)
-    if url.startswith("postgres://"):
-        return url.replace("postgres://", "postgresql+psycopg2://", 1)
-    if url.startswith("postgresql://"):
-        return url.replace("postgresql://", "postgresql+psycopg2://", 1)
-    return url
-
-
 settings = get_settings()
 config.set_main_option(
     "sqlalchemy.url",
-    _sync_database_url(settings.database_url),
+    normalize_database_url(settings.database_url),
 )
 
 
