@@ -2,13 +2,28 @@
 
 import os
 import secrets
+import uuid
 from collections.abc import Generator
+from unittest.mock import patch
 from urllib.parse import quote_plus
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
+
+from app.core.config import get_settings
+from app.core.security import create_access_token, hash_password
+from app.db.base import Base
+from app.db.database_url import normalize_database_url
+from app.db.session import get_db
+from app.main import create_app
+from app.models.user import MARKETING_TEAM_MEMBER_ROLE, User
+
+LOGIN_URL = "/api/v1/marketing-team-member/login"
+FORGOT_PASSWORD_URL = "/api/v1/marketing-team-member/forgot-password"
+HEALTH_URL = "/api/v1/health"
+PROTECTED_PROBE_URL = "/api/v1/internal/protected-probe"
 
 
 def _build_postgres_url(database: str) -> str:
@@ -24,7 +39,7 @@ def _build_postgres_url(database: str) -> str:
 if "DATABASE_URL" not in os.environ:
     os.environ["DATABASE_URL"] = _build_postgres_url("marketing_cal")
 if "TEST_DATABASE_URL" not in os.environ:
-    os.environ["TEST_DATABASE_URL"] = _build_postgres_url("marketing_cal_alex_test")
+    os.environ["TEST_DATABASE_URL"] = _build_postgres_url("marketing_cal_test")
 if "JWT_SECRET" not in os.environ:
     os.environ["JWT_SECRET"] = secrets.token_urlsafe(32)
 
@@ -39,46 +54,101 @@ os.environ.setdefault("KLAVIYO_API_KEY", "")
 if "TEST_USER_PASSWORD" not in os.environ:
     os.environ["TEST_USER_PASSWORD"] = secrets.token_urlsafe(16)
 
-ADMIN_EMAIL = "marketing.user@example.com"
-ADMIN_USERNAME = "marketing_user"
-ADMIN_PASSWORD = os.environ["TEST_USER_PASSWORD"]
-INACTIVE_EMAIL = "inactive.user@example.com"
-INACTIVE_PASSWORD = os.environ["TEST_USER_PASSWORD"]
-WRONG_ROLE_EMAIL = "admin.user@example.com"
-WRONG_ROLE_USERNAME = "admin_user"
-WRONG_ROLE_PASSWORD = os.environ["TEST_USER_PASSWORD"]
+TEST_PASSWORD = os.environ["TEST_USER_PASSWORD"]
+
+# Five test personas mapped to this API's role model.
+ADMIN_EMAIL = "admin@test.com"
+ADMIN_USERNAME = "admin_user"
+MEMBER_EMAIL = "user@test.com"
+MEMBER_USERNAME = "marketing_member"
+VIEWER_EMAIL = "viewer@test.com"
+VIEWER_USERNAME = "viewer_user"
+INACTIVE_EMAIL = "inactive@test.com"
+INACTIVE_USERNAME = "inactive_user"
+NEW_USER_EMAIL = "newuser@test.com"
+NEW_USER_USERNAME = "new_user"
+
+# Backward-compatible aliases used by legacy tests.
+MARKETING_EMAIL = MEMBER_EMAIL
+MARKETING_USERNAME = MEMBER_USERNAME
+MARKETING_PASSWORD = TEST_PASSWORD
+ADMIN_PASSWORD = TEST_PASSWORD
+INACTIVE_PASSWORD = TEST_PASSWORD
+WRONG_ROLE_EMAIL = ADMIN_EMAIL
+WRONG_ROLE_USERNAME = ADMIN_USERNAME
+WRONG_ROLE_PASSWORD = TEST_PASSWORD
 
 
-@pytest.fixture
-def client() -> Generator[TestClient, None, None]:
-    """Provide a FastAPI TestClient for HTTP integration tests."""
-    from app.core.config import get_settings
-    from app.main import create_app
+def _seed_test_users(db: Session) -> None:
+    """Insert the five canonical test personas (four in DB, one reserved for registration)."""
+    personas = [
+        User(
+            email=ADMIN_EMAIL,
+            username=ADMIN_USERNAME,
+            hashed_password=hash_password(TEST_PASSWORD),
+            role="admin",
+            is_active=True,
+        ),
+        User(
+            email=MEMBER_EMAIL,
+            username=MEMBER_USERNAME,
+            hashed_password=hash_password(TEST_PASSWORD),
+            role=MARKETING_TEAM_MEMBER_ROLE,
+            is_active=True,
+        ),
+        User(
+            email=VIEWER_EMAIL,
+            username=VIEWER_USERNAME,
+            hashed_password=hash_password(TEST_PASSWORD),
+            role="viewer",
+            is_active=True,
+        ),
+        User(
+            email=INACTIVE_EMAIL,
+            username=INACTIVE_USERNAME,
+            hashed_password=hash_password(TEST_PASSWORD),
+            role=MARKETING_TEAM_MEMBER_ROLE,
+            is_active=False,
+        ),
+    ]
+    db.add_all(personas)
+    db.commit()
 
-    get_settings.cache_clear()
-    with TestClient(create_app()) as test_client:
-        yield test_client
+
+def _truncate_all_tables(engine) -> None:
+    """Remove rows between tests without dropping schema."""
+    table_names = ", ".join(
+        f'"{table.name}"' for table in reversed(Base.metadata.sorted_tables)
+    )
+    if not table_names:
+        return
+    with engine.begin() as connection:
+        connection.execute(text(f"TRUNCATE {table_names} RESTART IDENTITY CASCADE"))
 
 
-@pytest.fixture
-def db_client() -> Generator[TestClient, None, None]:
-    """Provide a TestClient wired to an isolated PostgreSQL test database."""
-    from app.core.config import get_settings
-    from app.core.security import hash_password
-    from app.db.base import Base
-    from app.db.database_url import normalize_database_url
-    from app.db.session import get_db
-    from app.main import create_app
-    from app.models.user import MARKETING_TEAM_MEMBER_ROLE, User
-
+@pytest.fixture(scope="session")
+def test_engine():
+    """Create a session-scoped PostgreSQL engine and schema for integration tests."""
     get_settings.cache_clear()
     settings = get_settings()
     test_url = settings.test_database_url or settings.database_url
-
     engine = create_engine(normalize_database_url(test_url), pool_pre_ping=True)
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
-    testing_session = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    yield engine
+    Base.metadata.drop_all(bind=engine)
+
+
+@pytest.fixture
+def db_session_factory(test_engine):
+    """Provide a session factory bound to the test engine."""
+    return sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+
+
+@pytest.fixture
+def db_client(test_engine, db_session_factory) -> Generator[TestClient, None, None]:
+    """FastAPI TestClient backed by PostgreSQL with seeded users and table truncation."""
+    testing_session = db_session_factory
 
     def override_get_db() -> Generator[Session, None, None]:
         db = testing_session()
@@ -87,41 +157,66 @@ def db_client() -> Generator[TestClient, None, None]:
         finally:
             db.close()
 
+    get_settings.cache_clear()
     app = create_app()
     app.dependency_overrides[get_db] = override_get_db
 
     with testing_session() as db:
-        db.add(
-            User(
-                email=ADMIN_EMAIL,
-                username=ADMIN_USERNAME,
-                hashed_password=hash_password(ADMIN_PASSWORD),
-                role=MARKETING_TEAM_MEMBER_ROLE,
-                is_active=True,
-            )
-        )
-        db.add(
-            User(
-                email=INACTIVE_EMAIL,
-                username="inactive_user",
-                hashed_password=hash_password(INACTIVE_PASSWORD),
-                role=MARKETING_TEAM_MEMBER_ROLE,
-                is_active=False,
-            )
-        )
-        db.add(
-            User(
-                email=WRONG_ROLE_EMAIL,
-                username=WRONG_ROLE_USERNAME,
-                hashed_password=hash_password(WRONG_ROLE_PASSWORD),
-                role="admin",
-                is_active=True,
-            )
-        )
-        db.commit()
+        _truncate_all_tables(test_engine)
+        _seed_test_users(db)
 
-    with TestClient(app) as test_client:
-        yield test_client
+    with patch(
+        "app.clients.klaviyo_client.KlaviyoClient.send_password_reset_email",
+    ):
+        with TestClient(app) as test_client:
+            yield test_client
 
     app.dependency_overrides.clear()
-    Base.metadata.drop_all(bind=engine)
+    _truncate_all_tables(test_engine)
+
+
+@pytest.fixture
+def client() -> Generator[TestClient, None, None]:
+    """Provide a FastAPI TestClient without database overrides (health/docs tests)."""
+    get_settings.cache_clear()
+    with TestClient(create_app()) as test_client:
+        yield test_client
+
+
+@pytest.fixture
+def member_access_token(db_client: TestClient) -> str:
+    """Return a valid JWT access token for the active marketing team member."""
+    response = db_client.post(
+        LOGIN_URL,
+        json={"email_or_username": MEMBER_EMAIL, "password": TEST_PASSWORD},
+    )
+    assert response.status_code == 200
+    return response.json()["data"]["tokens"]["access_token"]
+
+
+@pytest.fixture
+def admin_access_token_attempt(db_client: TestClient) -> None:
+    """Admin users cannot obtain tokens; fixture documents expected denial."""
+    response = db_client.post(
+        LOGIN_URL,
+        json={"email_or_username": ADMIN_EMAIL, "password": TEST_PASSWORD},
+    )
+    assert response.status_code == 403
+
+
+@pytest.fixture
+def expired_access_token(db_client: TestClient) -> str:
+    """Return an expired JWT access token for middleware rejection tests."""
+    from datetime import timedelta
+
+    settings = get_settings()
+    login = db_client.post(
+        LOGIN_URL,
+        json={"email_or_username": MEMBER_EMAIL, "password": TEST_PASSWORD},
+    )
+    member_id = login.json()["data"]["user"]["id"]
+    return create_access_token(
+        {"sub": member_id},
+        settings,
+        expires_delta=timedelta(seconds=-1),
+    )

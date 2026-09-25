@@ -19,6 +19,72 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+# --- alex:migration-history start (managed by Alex) ---
+# Records every applied revision (who, where, when) in alembic_migration_history;
+# alembic_version alone only keeps the current head.
+import getpass as _alex_getpass
+import logging as _alex_logging
+import socket as _alex_socket
+from datetime import datetime as _alex_datetime
+from datetime import timezone as _alex_timezone
+
+import sqlalchemy as _alex_sa
+
+ALEX_MIGRATION_HISTORY_TABLE = "alembic_migration_history"
+_alex_history = _alex_sa.Table(
+    ALEX_MIGRATION_HISTORY_TABLE,
+    _alex_sa.MetaData(),
+    _alex_sa.Column("id", _alex_sa.Integer, primary_key=True, autoincrement=True),
+    _alex_sa.Column("revision", _alex_sa.String(255), nullable=False),
+    _alex_sa.Column("down_revisions", _alex_sa.String(255), nullable=True),
+    _alex_sa.Column("direction", _alex_sa.String(16), nullable=False),
+    _alex_sa.Column("is_stamp", _alex_sa.Boolean, nullable=False),
+    _alex_sa.Column("description", _alex_sa.String(255), nullable=True),
+    _alex_sa.Column("applied_by", _alex_sa.String(128), nullable=True),
+    _alex_sa.Column("hostname", _alex_sa.String(255), nullable=True),
+    _alex_sa.Column("applied_at", _alex_sa.DateTime(timezone=True), nullable=False),
+)
+
+
+def _alex_include_name(name, type_, parent_names):
+    return not (type_ == "table" and name == ALEX_MIGRATION_HISTORY_TABLE)
+
+
+def _alex_record_migration(ctx, step, heads, run_args):
+    if ctx.as_sql or ctx.connection is None:
+        return
+    try:
+        user = _alex_getpass.getuser()
+    except Exception:
+        user = None
+    try:
+        doc = (step.up_revision.doc or "") if step.up_revision is not None else ""
+    except Exception:
+        doc = ""
+    row = {
+        "revision": ",".join(step.up_revision_ids) or "base",
+        "down_revisions": ",".join(step.down_revision_ids) or None,
+        "direction": "upgrade" if step.is_upgrade else "downgrade",
+        "is_stamp": bool(step.is_stamp),
+        "description": doc.strip().splitlines()[0][:255] if doc.strip() else None,
+        "applied_by": user,
+        "hostname": _alex_socket.gethostname(),
+        "applied_at": _alex_datetime.now(_alex_timezone.utc),
+    }
+    conn = ctx.connection
+    try:
+        with conn.begin_nested():
+            _alex_history.create(conn, checkfirst=True)
+            conn.execute(_alex_history.insert().values(**row))
+    except Exception as exc:  # history must never block a migration
+        _alex_logging.getLogger("alembic").warning(
+            "Could not record migration history: %s", exc
+        )
+
+
+# --- alex:migration-history end ---
+
+
 def _sync_database_url() -> str:
     """Return a synchronous database URL for Alembic."""
     settings = get_settings()
@@ -29,6 +95,8 @@ def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
     url = _sync_database_url()
     context.configure(
+        on_version_apply=_alex_record_migration,
+        include_name=_alex_include_name,
         url=url,
         target_metadata=target_metadata,
         literal_binds=True,
@@ -50,7 +118,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(on_version_apply=_alex_record_migration, include_name=_alex_include_name, connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()
