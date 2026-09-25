@@ -1,5 +1,7 @@
 """Unit tests for KlaviyoClient adapter."""
 
+import os
+import secrets
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -12,8 +14,11 @@ from app.core.config import Settings
 @pytest.fixture
 def klaviyo_settings() -> Settings:
     """Return settings with a Klaviyo API key configured."""
+    api_key = os.environ.get("KLAVIYO_API_KEY")
+    if not api_key:
+        api_key = f"pk_test_{secrets.token_hex(8)}"
     return Settings(
-        KLAVIYO_API_KEY="pk_test_klaviyo_key",
+        KLAVIYO_API_KEY=api_key,
         KLAVIYO_MAX_RETRIES=3,
         FRONTEND_RESET_URL="http://localhost:3000/reset-password",
     )

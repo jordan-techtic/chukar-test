@@ -1,5 +1,6 @@
 """Unit tests for AuthService business logic."""
 
+import os
 import uuid
 from unittest.mock import MagicMock
 
@@ -16,9 +17,9 @@ from app.services.auth_service import AuthService
 def test_settings() -> Settings:
     """Return settings configured for unit tests."""
     return Settings(
-        JWT_SECRET="test-jwt-secret-key-for-pytest-only-minimum-length",
-        JWT_ALGORITHM="HS256",
-        KLAVIYO_API_KEY="pk_test",
+        JWT_SECRET=os.environ["JWT_SECRET"],
+        JWT_ALGORITHM=os.environ.get("JWT_ALGORITHM", "HS256"),
+        KLAVIYO_API_KEY=os.environ.get("KLAVIYO_API_KEY", ""),
     )
 
 
@@ -76,7 +77,10 @@ def test_login_success_with_email(
         lambda *_args, **_kwargs: "refresh-token",
     )
 
-    result = service.login("marketing.user@example.com", "SecurePass1!")
+    result = service.login(
+        "marketing.user@example.com",
+        os.environ["TEST_USER_PASSWORD"],
+    )
     assert result.tokens.access_token == "access-token"
     assert result.tokens.refresh_token == "refresh-token"
     assert result.user.email == active_user.email
@@ -89,7 +93,7 @@ def test_login_unknown_user_raises_unauthorized(test_settings: Settings) -> None
     service._user_repo.get_by_email_or_username = MagicMock(return_value=None)
 
     with pytest.raises(UnauthorizedError) as exc_info:
-        service.login("unknown@example.com", "SecurePass1!")
+        service.login("unknown@example.com", os.environ["TEST_USER_PASSWORD"])
 
     assert exc_info.value.code == "INVALID_CREDENTIALS"
 
@@ -129,7 +133,10 @@ def test_login_inactive_user_raises_forbidden(
     )
 
     with pytest.raises(ForbiddenError) as exc_info:
-        service.login("marketing.user@example.com", "SecurePass1!")
+        service.login(
+            "marketing.user@example.com",
+            os.environ["TEST_USER_PASSWORD"],
+        )
 
     assert exc_info.value.code == "ACCOUNT_INACTIVE"
 
@@ -150,7 +157,7 @@ def test_login_wrong_role_raises_forbidden(
     )
 
     with pytest.raises(ForbiddenError) as exc_info:
-        service.login("admin.user@example.com", "SecurePass1!")
+        service.login("admin.user@example.com", os.environ["TEST_USER_PASSWORD"])
 
     assert exc_info.value.code == "ACCESS_DENIED"
 

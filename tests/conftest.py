@@ -1,41 +1,52 @@
 """Shared pytest fixtures for integration and unit tests."""
 
 import os
+import secrets
 from collections.abc import Generator
+from urllib.parse import quote_plus
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-os.environ.setdefault(
-    "DATABASE_URL",
-    "postgresql://postgres:root@127.0.0.1:5432/marketing_cal",
-)
-os.environ.setdefault(
-    "TEST_DATABASE_URL",
-    "postgresql://postgres:root@127.0.0.1:5432/marketing_cal_alex_test",
-)
-os.environ.setdefault(
-    "JWT_SECRET",
-    "test-jwt-secret-key-for-pytest-only-minimum-length",
-)
+
+def _build_postgres_url(database: str) -> str:
+    """Build a PostgreSQL URL from optional TEST_DB_* environment variables."""
+    host = os.environ.get("TEST_DB_HOST", "127.0.0.1")
+    port = os.environ.get("TEST_DB_PORT", "5432")
+    user = quote_plus(os.environ.get("TEST_DB_USER", "postgres"))
+    password = os.environ.get("TEST_DB_PASSWORD", "")
+    credentials = f"{user}:{quote_plus(password)}" if password else user
+    return f"postgresql://{credentials}@{host}:{port}/{database}"
+
+
+if "DATABASE_URL" not in os.environ:
+    os.environ["DATABASE_URL"] = _build_postgres_url("marketing_cal")
+if "TEST_DATABASE_URL" not in os.environ:
+    os.environ["TEST_DATABASE_URL"] = _build_postgres_url("marketing_cal_alex_test")
+if "JWT_SECRET" not in os.environ:
+    os.environ["JWT_SECRET"] = secrets.token_urlsafe(32)
+
 os.environ.setdefault("JWT_ALGORITHM", "HS256")
 os.environ.setdefault("ACCESS_TOKEN_EXPIRE_MINUTES", "30")
 os.environ.setdefault("REFRESH_TOKEN_EXPIRE_DAYS", "7")
 os.environ.setdefault("AUTH_STRATEGY", "jwt")
 os.environ.setdefault("CORS_ORIGINS", '["http://localhost:3000"]')
 os.environ.setdefault("ENVIRONMENT", "test")
-os.environ.setdefault("KLAVIYO_API_KEY", "pk_test_klaviyo_key")
+os.environ.setdefault("KLAVIYO_API_KEY", "")
+
+if "TEST_USER_PASSWORD" not in os.environ:
+    os.environ["TEST_USER_PASSWORD"] = secrets.token_urlsafe(16)
 
 ADMIN_EMAIL = "marketing.user@example.com"
 ADMIN_USERNAME = "marketing_user"
-ADMIN_PASSWORD = "SecurePass1!"
+ADMIN_PASSWORD = os.environ["TEST_USER_PASSWORD"]
 INACTIVE_EMAIL = "inactive.user@example.com"
-INACTIVE_PASSWORD = "SecurePass1!"
+INACTIVE_PASSWORD = os.environ["TEST_USER_PASSWORD"]
 WRONG_ROLE_EMAIL = "admin.user@example.com"
 WRONG_ROLE_USERNAME = "admin_user"
-WRONG_ROLE_PASSWORD = "SecurePass1!"
+WRONG_ROLE_PASSWORD = os.environ["TEST_USER_PASSWORD"]
 
 
 @pytest.fixture
